@@ -1,18 +1,27 @@
 <template>
   <div class="home">
-    <img alt="Vue logo" src="../assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
+    <game v-if="currentGame"></game>
+    <load-game v-else ></load-game>
   </div>
 </template>
 
 <script>
 // @ is an alias to /src
-import HelloWorld from '@/components/HelloWorld.vue'
+import { mapActions, mapState } from 'vuex'
+import LoadGame from '@/views/LoadGame'
+import Game from '@/views/Game'
 
 export default {
   name: 'Home',
   components: {
-    HelloWorld
+    Game,
+    LoadGame
+  },
+  computed: {
+    ...mapState(['currentGame'])
+  },
+  methods: {
+    ...mapActions(['closeCurrentGame'])
   }
 }
 </script>
