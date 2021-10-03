@@ -22,6 +22,20 @@
         <span v-else>Aucun</span>
       </v-card-text>
     </v-card>
+
+    <v-card class="mb-2">
+      <v-card-title><v-icon>fas fa-place-of-worship</v-icon>Lieux</v-card-title>
+      <v-divider></v-divider>
+      <v-card-text>
+        <ul v-if="activePlaces.length">
+          <li v-for="(place) in activePlaces" :key="place.id">
+            {{ place.name }}
+            <edit-place :index="place.id " />
+          </li>
+        </ul>
+        <span v-else>Aucun</span>
+      </v-card-text>
+    </v-card>
   </div>
 </template>
 
@@ -29,11 +43,12 @@
 import { mapGetters } from 'vuex'
 import EditCharacter from '@/components/EditCharacter'
 import EditGoal from '@/components/EditGoal'
+import EditPlace from '@/components/EditPlace'
 export default {
   name: 'ListsView',
-  components: { EditGoal, EditCharacter },
+  components: { EditGoal, EditCharacter, EditPlace },
   computed: {
-    ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters', 'activeGoals'])
+    ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters', 'activeGoals', 'activePlaces'])
   }
 }
 </script>

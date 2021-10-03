@@ -39,7 +39,7 @@
             <v-timeline-item small fill-dot v-for="(sceneLog, i) in currentLogs" :key="i" :icon="sceneLog.icon || 'fas fa-bolt'"> <!-- hide-dot -->
               <template v-slot:icon>
                 <v-avatar v-if="sceneLog.avatar">
-                  <img :src="sceneLog.avatar">
+                  <img :src="sceneLog.avatar" alt="Log">
                   <!--
                   <img src="https://live.staticflickr.com/130/364558161_bf6529e043_m.jpg" v-if="i%6===2">
                   <img src="https://live.staticflickr.com/3164/2759452413_65b9d7c017_m.jpg" v-if="i%6===5">
@@ -77,14 +77,7 @@
 
       <edit-character />
       <edit-goal />
-      <v-tooltip top>
-        <template v-slot:activator="{ on }">
-          <v-btn color="primary" fab small disabled class="mr-2" v-on="on">
-            <v-icon small>fas fa-place-of-worship</v-icon>
-          </v-btn>
-        </template>
-        <span>Lieux</span>
-      </v-tooltip>
+      <edit-place />
       <v-tooltip top>
         <template v-slot:activator="{ on }" v-on="on">
           <v-btn color="primary" fab small disabled class="mr-2">
@@ -112,13 +105,14 @@ import EditCharacter from '@/components/EditCharacter'
 import EditLog from '@/components/EditLog'
 import Tag from '@/components/Tag'
 import EditGoal from '@/components/EditGoal'
+import EditPlace from '@/components/EditPlace'
 import AddQuestion from '@/components/AddQuestion'
 import AddComment from '@/components/AddComment'
 import AddEvent from '@/views/AddEvent'
 
 export default {
   name: 'Game',
-  components: { AddEvent, AddComment, AddQuestion, Tag, EditCharacter, EditScene, EditLog, EditGoal },
+  components: { AddEvent, AddComment, AddQuestion, Tag, EditCharacter, EditScene, EditLog, EditGoal, EditPlace },
   beforeRouteUpdate (to, from, next) {
     console.log('to:' + to, 'from:' + from)
     if (!this.currentGame) {
@@ -168,10 +162,8 @@ export default {
         res = 4
       } else if (this.activeGoals.length) {
         res = 3
-      } else if (this.activeNonPlayerCharacters.length) {
-        res = 2
       } else if (this.activePlayerCharacters.length) {
-        res = 1
+        res = 2
       } else {
         res = 0
       }
@@ -180,9 +172,16 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['closeCurrentGame']),
+    ...mapActions(['closeCurrentGame', 'updatePlace']),
     goToTheEnd () {
       setTimeout(() => document.body.scrollIntoView(false), 20)
+    },
+    addPlace () {
+      this.updatePlace({
+        index: -1,
+        name: '',
+        isActive: this.isActive
+      })
     }
   },
   watch: {

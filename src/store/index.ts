@@ -4,7 +4,7 @@ import Vuex from 'vuex'
 import data from '@/assets/data.json'
 import { randomName } from '@/utils/names.ts'
 import { randomize } from '@/utils/random.ts'
-import { Character, Game, GameRef, Goal, RootState, Scene, SceneLog } from './types'
+import { Character, Game, GameRef, Goal, Place, RootState, Scene, SceneLog } from './types'
 
 Vue.use(Vuex)
 
@@ -13,11 +13,16 @@ const inMemoryGames: Game[] = []
 
 type SceneUpdate = { index: number; name: string; context: string; summary: string }
 type CharacterUpdate = { index: number; name: string; isPlayer: boolean }
+type PlaceUpdate = { index: number; name: string; isActive: boolean }
 type GoalUpdate = { index: number; label: string; isActive: boolean }
-type QuestionUpdate = { index: number; question: string }
+type QuestionUpdate = { index: number; question: string; label: string; isActive: boolean }
 type SceneLogUpdate = {
   index: number; sceneIndex: number; icon: string | undefined; avatar: string | undefined;
   mechanical: string | undefined; interpretation: string | undefined; inspirations: string[];
+}
+
+function cleanupRandomConstruct (s: string) {
+  return s.replace(/\b([dl])[ea] ([AEIUOY])/gim, '$1\'$2')
 }
 
 export default new Vuex.Store({
@@ -28,6 +33,9 @@ export default new Vuex.Store({
     },
     activeNonPlayerCharacters (state: RootState): Character[] {
       return state.currentGame ? state.currentGame.characters.filter(c => c.isActive && !c.isPlayer) : []
+    },
+    activePlaces (state: RootState): Place[] {
+      return state.currentGame ? state.currentGame.places.filter(c => c.isActive) : []
     },
     activeGoals (state: RootState): Goal[] {
       return state.currentGame ? state.currentGame.goals.filter(c => c.isActive) : []
@@ -112,8 +120,8 @@ export default new Vuex.Store({
       if (!state.currentGame) {
         throw Error('No loaded game')
       }
-      let index = update.index
-      if (!(index >= 0)) {
+      let index = update.index ?? -1
+      if (index < 0) {
         index = state.currentGame.scenes.length
         state.currentGame.scenes.push(new Scene(index))
       } else if (index >= state.currentGame.scenes.length) {
@@ -134,8 +142,8 @@ export default new Vuex.Store({
       if (!state.currentGame) {
         throw Error('No loaded game')
       }
-      let index = update.index
-      if (!(index >= 0)) {
+      let index = update.index ?? -1
+      if (index < 0) {
         index = state.currentGame.characters.length
         state.currentGame.characters.push(new Character(index))
       } else if (index >= state.currentGame.characters.length) {
@@ -152,12 +160,32 @@ export default new Vuex.Store({
         character.isPlayer = update.isPlayer
       }
     },
+    updatePlace (state: RootState, payload: { update: PlaceUpdate; getters: any }) {
+      const { update, getters } = payload
+      if (!state.currentGame) {
+        throw Error('No loaded game')
+      }
+      let index = update.index ?? -1
+      if (index < 0) {
+        index = state.currentGame.places.length
+        state.currentGame.places.push(new Place(index))
+      } else if (index >= state.currentGame.places.length) {
+        throw Error('No character at index: ' + index)
+      }
+      const place = state.currentGame.places[index]
+      if (update.name !== undefined) {
+        place.name = update.name
+      }
+      if (!place.name) {
+        place.name = cleanupRandomConstruct((randomize(getters.activeTagsByType.get('__place')) + ' de ' + randomName()))
+      }
+    },
     updateSceneLog (state: RootState, update: SceneLogUpdate) {
       if (!state.currentGame) {
         throw Error('No loaded game')
       }
-      let index = update.index
-      if (!(index >= 0)) {
+      let index = update.index ?? -1
+      if (index < 0) {
         index = state.currentGame.logs.length
         const sceneIndex = state.currentGame.scenes.length - 1
         const newItem = new SceneLog(sceneIndex, index)
@@ -188,12 +216,13 @@ export default new Vuex.Store({
         item.inspirations = update.inspirations
       }
     },
-    updateGoal (state: RootState, update: GoalUpdate) {
+    updateGoal (state: RootState, payload: { update: GoalUpdate; getters: any }) {
+      const { update, getters } = payload
       if (!state.currentGame) {
         throw Error('No loaded game')
       }
-      let index = update.index
-      if (!(index >= 0)) {
+      let index = update.index ?? -1
+      if (index < 0) {
         index = state.currentGame.goals.length
         state.currentGame.goals.push(new Goal(index))
       } else if (index >= state.currentGame.goals.length) {
@@ -203,6 +232,9 @@ export default new Vuex.Store({
       if (update.label !== undefined) {
         item.label = update.label
       }
+      if (!item.label) {
+        item.label = cleanupRandomConstruct(randomize(getters.activeTagsByType.get('__action')) + ' de ' + randomize(getters.activeTagsByType.get('__action_object')))
+      }
       if (update.isActive !== undefined) {
         item.isActive = update.isActive
       }
@@ -211,8 +243,8 @@ export default new Vuex.Store({
       if (!state.currentGame) {
         throw Error('No loaded game')
       }
-      let index = update.index
-      if (!(index >= 0)) {
+      let index = update.index ?? -1
+      if (index < 0) {
         index = state.currentGame.sceneLogs.length
         state.currentGame.goals.push(new Goal(index))
       } else if (index >= state.currentGame.goals.length) {
@@ -233,14 +265,113 @@ export default new Vuex.Store({
   },
   actions: {
     async createFakeGame ({ dispatch }) {
-      await dispatch('createNewGame', { name: 'Arrrhh !!', tags: ['Pirates'] })
+      await dispatch('createNewGame', { name: '7e mer', tags: ['Pirates'] })
+      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Read (Thomas)' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Eilissa (Marjo)' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Ruby (Margot)' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Batea, espion repenti de la CCA, petit ami de Liani' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Liani, espion de la CCA, petite amie de Batea' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Gustav Gregor Damaske, Hexe [Scélérat]' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Kabu, chasseur, phobie de la mer, fils de l\'ancêtre Nasa (H)' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Grand-Mère Nan, fille de l\'ancêtre Karaya (F)' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Tit\'Nan, pêcheuse de perles, petite fille de Grand-Mère Nan' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Enoon, marchand de perles' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du fort' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Enrico Munafo, Capitaine du "Vol au Vent", Agent de la CCA, Chargement d\'esclaves, [Scélérat]' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du port, maitre des registres' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Beeron, Agent du Riroco, Prisonnier de la CCA, Dénoncé par Batea' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Qidan, Tailleur de harpons, Veut libérer son père (Beeron), rancune contre la CCA' })
+      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Le tavernier, à la potence pour avoir "aidé les héros à s\'enfuir' })
+      dispatch('updateGoal', { isActive: true, label: 'Faire péter le fort de la CCA sur l\'île' })
+      dispatch('updateGoal', { isActive: true, label: 'Faire fortune' })
+      dispatch('updateGoal', { isActive: true, label: 'Boire du rhum' })
+      dispatch('updateGoal', { isActive: true, label: 'Protéger sa/la liberté' })
+      dispatch('updatePlace', { isActive: true, name: 'Le port, les personnages y  sont recherchés' })
+      dispatch('updatePlace', { isActive: true, name: 'Le fort, de la poudre et des esclaves y sont enfermés avant d\'être vendus en Jaragua' })
+      dispatch('updatePlace', { isActive: true, name: 'La planque de Batea et Liana' })
+      dispatch('updatePlace', { isActive: true, name: 'La planque de l\'Hexe, un cabanon  dans la jungle' })
+      dispatch('updatePlace', { isActive: true, name: 'Le volcan, Ambiance sulfureuse (on y trouve du souffre)' })
       await dispatch('updateScene', {
-        index: -1,
-        name: 'A la taverne du "Poney Fringant"',
-        context: 'Bonne ambiance au "Poney Fringant", l\'alcool coule à flot, quand soudain... Un matelot ouvre la porte en grand fracas: "Les bernards-l\'hermite attaquent !"'
+        name: 'Grabuge à la taverne',
+        context: 'Read et Eilissa discutent avec deux Rahuris à la taverne du "Vieux Faucon"',
+        summary: 'Les personages (Read et Eilissa) sympathisent avec deux Rahuris (Batea et Liani). Ils boivent des ' +
+          'bières en réfléchissant à comment porter un coup à la Compagnie Commerciale Atabéenne. Malheureusement, des ' +
+          'brutes de la CCA dans la taverne ne l\'entende pas de cette manière... et c\'est la baston. Nos héros leur ' +
+          'mettent une raclée... puis à la garde de la CCA qui débarque. '
       })
       await dispatch('updateScene', {
-        index: 0,
+        name: 'Fuite dans la jungle avec les deux Rahuris. ',
+        context: 'Pendant la nuit, Batea à un rendez vous secret',
+        summary: 'Pendant la nuit, Batea à un rendez vous secret. S\'ensuit une filature, puis une course poursuite ' +
+          'dans la jungle pour capturer Batea et le messager qu\'il envoie à la CCA. Liani se révèle être aussi à la ' +
+          'solde de la CCA, et s\'enfuit dans la jungle. '
+      })
+      await dispatch('addComment', 'Le messager est abandonné ligoté dans la jungle')
+      await dispatch('updateScene', {
+        name: 'Enquête de grenouilles. ',
+        context: 'Read reçoit la visite de Lechtouille',
+        summary: 'Pendant la même nuit, Read reçoit la visite de Lechtouille, ' +
+          'une coqui (grenouille messagère des morts). Il guide les personnages à Soryana, le royaume des morts. ' +
+          'Quand il realise qu\'il est dans la grotte qui abrite le nom de ses ancêtres, Batea se repent et promet ' +
+          'd\'aider les personnages. À Soryana, ils apprennent que des ancêtres disparaissent. En retournant dans le ' +
+          'monde des vivants, ils suivent une piste de coqui (mortes?) qui les mène à un cabanon dans la jungle. ' +
+          'Ils y libèrent un (2?) ancêtre apathique, qu\'ils ramènent à son village à Soryana. '
+      })
+      await dispatch('updateScene', {
+        name: 'Combat contre l\'Hexe',
+        context: 'Les personnages sont maintenant à l\'affût au cabanon, dans l\'espoir de retrouver son maléfique ' +
+          'propriétaire. ',
+        summary: 'L\'Hexe qui habite là tombe entre les mains des personnages, mais les ancêtres qui l\'accompagnent ' +
+          's\'interposent. Après avoir été blessés, ils se transforment en mabuya. '
+      })
+      await dispatch('updateScene', {
+        name: 'Il faut sauver les anciens',
+        context: '',
+        summary: 'De retour à Soryana, ils apprennent comment les libérer, et qui chercher pour trouver un objet cher ' +
+          'aux ancêtres de leur vivant. \n' +
+          'Tit\'Nan leur demande leur aide avec une palourde géante. Après 2 échecs, un peu d\'explosif en viendra ' +
+          'finalement à bout. Elle leur donnera une belle perle (1 de richesse) en remerciement. Elle les conduits ' +
+          'ensuite à sa grand mère, Grand-Mère Nan, qui leur confiera le bracelet d\'esclave de Karaya. \n' +
+          '\n' +
+          'Kabu le chasseur, fils de Nasa, leur confie la conque de son père. Après un bref passage à Soryana pour ' +
+          'bénir les objets, Kabu les guide jusqu\'au seul temple en ruines qu\'il connaisse dans la jungle, où ils ' +
+          'ramènent Karaya à la raison. \n' +
+          '\n' +
+          'Ils cherchent ensuite Nasa au large de son village. À la tombée de la nuit, un serpent de mer attaque leur ' +
+          'bateau de pêche. Une fois le serpent mis hors d\'état de nuire, Nasa apparaît, et les personnages le ' +
+          'ramènent à lui. '
+      })
+      await dispatch('updateScene', {
+        name: 'Quand on arrive en ville...',
+        context: '',
+        summary: 'Les personnages cherchent à se procurer une grande quantité de poudre pour faire péter le fort. ' +
+          'Après avoir contacté Tit\'Nan et grand-mère Nan sans succès, ils retournent discrètement au port où ils ' +
+          'sont maintenant recherchés. Sur la route, un flash de lumière leur indique que quelqu\'un les à repéré. ' +
+          'Ils visitent un peu rudement Qidan le tailleur de harpon, un contact de Batea dont le père (Beeron) est ' +
+          'enfermé au fort et qui a toutes les raisons d\'en vouloir à la CCA (et à Batea). Il leur indique que le ' +
+          'capitaine du port a toutes les cargaisons listés dans son registre. Que sinon, il doivent pouvoir en ' +
+          'fabriquer à base de charbon, de salpètre (conservateur pour le poisson) et de souffre (du volcan). \n' +
+          'De retour se planquer chez Batea, ils le surprennent au milieu de la nuit en pleine discussion mouvementé ' +
+          'avec Liani.'
+      })
+      await dispatch('updateScene', {
+        name: '',
+        context: '',
+        summary: ''
+      })
+
+      await dispatch('createNewGame', { name: 'Arrrhh !!', tags: ['Pirates'] })
+      for (let i = 0; i < 3; i++) {
+        await dispatch('updateCharacter', { name: '', isPlayer: true })
+      }
+      for (let i = 0; i < 5; i++) {
+        await dispatch('updateCharacter', { name: '', isPlayer: false })
+        await dispatch('updatePlace', { name: '' })
+        await dispatch('updateGoal', { label: '' })
+      }
+      await dispatch('updateScene', {
+        name: 'A la taverne du "Poney Fringant"',
+        context: 'Bonne ambiance au "Poney Fringant", l\'alcool coule à flot, quand soudain... Un matelot ouvre la porte en grand fracas: "Les bernards-l\'hermite attaquent !"',
         summary: 'Grosse chouffe, une attaque de crustacés, les personnages sauvent une fillette'
       })
       for (let i = 0; i < 5; i++) {
@@ -258,7 +389,7 @@ export default new Vuex.Store({
       await dispatch('updateScene', {
         index: -1,
         name: 'L\'Effondrement',
-        context: 'Matt est en train de travailler dans son champ quan soudain le sol se met à trembler !'
+        context: 'Matt est en train de travailler dans son champ quand soudain le sol se met à trembler !'
       })
 
       dispatch('updateGoal', { isActive: true, label: 'Survivre' })
@@ -284,11 +415,14 @@ export default new Vuex.Store({
     updateCharacter ({ commit }, payload: CharacterUpdate) {
       commit('updateCharacter', payload)
     },
+    updatePlace ({ commit, getters }, payload: PlaceUpdate) {
+      commit('updatePlace', { update: payload, getters })
+    },
     updateSceneLog ({ commit }, payload: SceneLogUpdate) {
       commit('updateSceneLog', payload)
     },
-    updateGoal ({ commit }, payload: GoalUpdate) {
-      commit('updateGoal', payload)
+    updateGoal ({ commit, getters }, payload: GoalUpdate) {
+      commit('updateGoal', { update: payload, getters })
     },
     updateQuestion ({ commit }, payload: GoalUpdate) {
       commit('updateQuestion', payload)

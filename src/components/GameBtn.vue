@@ -8,6 +8,8 @@
 <script lang="ts">
 
 import { mapActions, mapState } from 'vuex'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import VueRouter from 'vue-router'
 
 export default {
   name: 'game-btn',
@@ -54,20 +56,26 @@ export default {
     routeEquals (name: string): boolean {
       return this.$route.name === name
     },
+    routerPush (location: string) {
+      // eslint-disable-next-line dot-notation
+      // this['router'].push(location)
+      this.$router.push(location)
+    },
     onClick () {
       if (this.isGo) {
-        this.$router.push('/game')
+        const location = '/game'
+        this.routerPush(location)
       } else if (this.isClose) {
         this.closeGame()
       } else if (this.isLoad) {
-        this.$router.push('/load')
+        this.routerPush('/load')
       } else {
         console.log('Unexpected state, shouldn\'t be visible')
       }
     },
     closeGame () {
       this.closeCurrentGame()
-      this.$router.push('/')
+      this.routerPush('/')
     }
   }
 }

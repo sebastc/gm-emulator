@@ -33,9 +33,15 @@ export class Character {
 }
 
 export class Place {
+  id: PlaceRef;
   name = 'lieu';
+  isActive = true;
   aspects: Aspect[] = [];
   people: CharacterRef[] = [];
+
+  constructor (id: PlaceRef) {
+    this.id = id
+  }
 }
 
 export class Question {
@@ -173,4 +179,22 @@ Microscope:
  - Palette
  - Big Picture
  - Book ends
+ */
+
+/*
+Places:
+
+ - hierarchical
+ - proxymity
+ - respect planarity ( planar graph generation [[][[][]]] )
+ - conceptually:
+   - A sub-region can be introduced within an existing region
+   - neighboring regions are stable
+   - planarity is respected
+ */
+
+/*
+Random ideas:
+ - Alternate aspects (eg. secretive version: "une silhouette encapuchonnée", from a distance version: "un village perché au bord de la falaise")
+ - MJ only visibility
  */

@@ -39,7 +39,7 @@ export default {
   },
   computed: {
     ...mapState(['currentGame']),
-    ...mapGetters(['activeTagsByType', 'activePlayerCharacters']),
+    ...mapGetters(['activeTagsByType', 'activePlayerCharacters', 'activePlaces']),
     isNew () {
       return !this.isModification
     },
@@ -65,7 +65,8 @@ export default {
   methods: {
     ...mapActions(['updateScene']),
     newRandomContext () {
-      this.context = ' - Lieu : ' + randomize(this.activeTagsByType.get('__place')) + '\n - action : ' +
+      const place = Math.random() > 0.5 && this.activePlaces.length > 0 ? randomize(this.activePlaces).name : randomize(this.activeTagsByType.get('__place'))
+      this.context = ' - Lieu : ' + place + '\n - action : ' +
         randomize(this.activeTagsByType.get('__action')) + '\n - objet : ' +
         randomize(this.activeTagsByType.get('__action_object'))
     },
