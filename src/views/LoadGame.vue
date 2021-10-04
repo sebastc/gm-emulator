@@ -54,7 +54,7 @@
         <i v-if="!games.length">Aucune partie sauvegardée</i>
       </v-card-text>
     </v-card>
-    <v-card class="mt-3" color="#8fff96">
+    <v-card class="mt-3" color="#8fff96" v-if="enableDevUtils">
       <v-card-title>Outils de dev</v-card-title>
       <v-card-text>
         <v-btn x-small @click="createFakeGame()" >Injecter des fausses données</v-btn>
@@ -79,7 +79,10 @@ export default {
     }
   },
   computed: {
-    ...mapState(['games'])
+    ...mapState(['games']),
+    enableDevUtils () {
+      return process.env.VUE_APP_ENABLE_DEV_UTILS === 'true'
+    }
   },
   methods: {
     remove (item) {
