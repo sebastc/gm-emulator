@@ -24,6 +24,7 @@
         <v-btn icon to='/tags' v-if="$route.name !== 'Tags'"><v-icon>fas fa-tags</v-icon></v-btn>
         <game-btn />
       </v-toolbar-items>
+      <span id="remotestorage-widget"></span>
     </v-app-bar>
 
     <v-main>
@@ -57,6 +58,9 @@ export default Vue.extend({
       return `Git Hash: '${process?.env?.VUE_APP_GIT_HASH ?? 'N/A'}'`
     }
   },
+  methods: {
+    ...mapActions(['showRemoteStorageWidget'])
+  },
   watch: {
     $route: {
       handler (to, from) {
@@ -68,6 +72,9 @@ export default Vue.extend({
       },
       immediate: true
     }
+  },
+  mounted () {
+    this.showRemoteStorageWidget()
   }
 })
 </script>

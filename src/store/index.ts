@@ -6,7 +6,91 @@ import { randomName } from '@/utils/names.ts'
 import { randomize } from '@/utils/random.ts'
 import { Character, Game, GameRef, Goal, Place, RootState, Scene, SceneLog } from './types'
 
+import RemoteStorage from 'remotestoragejs'
+import Widget from 'remotestorage-widget'
+import BaseClient from 'remotestoragejs/release/types/baseclient'
+
 Vue.use(Vuex)
+
+function uuidv4 () {
+  return ('' + 1e7 + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c: string) =>
+    (parseInt(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> parseInt(c) / 4).toString(16)
+  )
+}
+
+const GAMES_PATH = 'games/'
+interface RSGame {
+  id: string;
+  name: string;
+  tags: string[];
+}
+const RSGameModule = {
+  name: 'gm_emulator',
+  builder: function (privateClient: BaseClient, publicClient: BaseClient) {
+    privateClient.declareType('game', {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string'
+        },
+        name: {
+          type: 'string'
+        },
+        tags: {
+          type: 'array',
+          items: 'string',
+          minimum: 1
+        }
+      },
+      required: ['id', 'name', 'tags']
+    })
+
+    return {
+      exports: {
+        list: async function (): Promise<RSGame[]> {
+          return await privateClient.getAll(GAMES_PATH) as RSGame[]
+        },
+        save: async function (game: RSGame) {
+          if (!game.id) game.id = uuidv4()
+          await privateClient.storeObject('game', GAMES_PATH + game.id, game)
+          return game
+        },
+        remove: async function (game: RSGame|string) {
+          const path = GAMES_PATH + (typeof game === 'string' ? game : game.id)
+          await privateClient.remove(path)
+        }
+      }
+    }
+  }
+}
+
+const remoteStorage = new RemoteStorage({
+  logging: true,
+  modules: [RSGameModule]
+})
+
+remoteStorage.access.claim('gm-emulator', 'rw')
+remoteStorage.caching.enable('/gm-emulator/')
+
+const widget = new Widget(remoteStorage, { logging: true })
+
+remoteStorage.on('connected', () => {
+  const userAddress = remoteStorage.remote.userAddress
+  console.debug(`${userAddress} connected their remote storage.`)
+})
+
+remoteStorage.on('ready', () => {
+  const userAddress = remoteStorage.remote.userAddress
+  console.debug(`${userAddress} remote storage is read.`)
+})
+
+remoteStorage.on('network-offline', () => {
+  console.debug('We\'re offline now.')
+})
+
+remoteStorage.on('network-online', () => {
+  console.debug('Hooray, we\'re back online.')
+})
 
 let inMemoryIdSeq = 1
 const inMemoryGames: Game[] = []
@@ -90,17 +174,16 @@ export default new Vuex.Store({
     }
   },
   mutations: {
-    newGame (state: RootState, payload: {name: string; tags: string[]}) {
-      state.currentGame = new Game()
-      state.currentGame.id = 'game-' + (++inMemoryIdSeq)
-      state.currentGame.name = payload.name
-      state.currentGame.tags = payload.tags
-      inMemoryGames.push(state.currentGame)
-      const gameRef = new GameRef()
-      gameRef.id = state.currentGame.id
-      gameRef.name = state.currentGame.name
-      gameRef.tags = state.currentGame.tags
+    newGame (state: RootState, gameRef: RSGame) {
       state.games.push(gameRef)
+
+      const game = new Game()
+      game.id = gameRef.id
+      game.name = gameRef.name
+      game.tags = gameRef.tags
+
+      inMemoryGames.push(game)
+      state.currentGame = game
       return state
     },
     loadGame (state: RootState, id: string) {
@@ -400,6 +483,11 @@ export default new Vuex.Store({
     },
     createNewGame ({ commit /*, state */ }, payload: {name: string; tags: string[]}) {
       commit('loadTags')
+      const game = new GameRef()
+      game.id = 'game-' + (++inMemoryIdSeq)
+      game.name = payload.name
+      game.tags = payload.tags;
+      (remoteStorage as any).gm_emulator.save(game)
       commit('newGame', payload)
     },
     loadSavedGame ({ commit }, id) {
@@ -532,6 +620,9 @@ export default new Vuex.Store({
     },
     loadTags ({ commit }) {
       commit('loadTags')
+    },
+    showRemoteStorageWidget ({ commit }) {
+      widget.attach('remotestorage-widget')
     }
   },
   modules: {
