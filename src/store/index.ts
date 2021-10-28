@@ -4,7 +4,7 @@ import Vuex from 'vuex'
 import data from '@/assets/data.json'
 import { randomName } from '@/utils/names.ts'
 import { randomize } from '@/utils/random.ts'
-import { Character, Game, GameRef, Goal, Place, RootState, Scene, SceneLog } from './types'
+import { Character, Game, Goal, Place, RootState, Scene, SceneLog } from './types'
 
 import RemoteStorage from 'remotestoragejs'
 import Widget from 'remotestorage-widget'
@@ -24,6 +24,13 @@ interface RSGame {
   name: string;
   tags: string[];
 }
+
+interface GameModule {
+  list: () => Promise<RSGame[]>;
+  save: (game: RSGame) => Promise<RSGame>;
+  remove: (game: RSGame|string) => any;
+}
+
 const RSGameModule = {
   name: 'gm_emulator',
   builder: function (privateClient: BaseClient, publicClient: BaseClient) {
@@ -45,22 +52,23 @@ const RSGameModule = {
       required: ['id', 'name', 'tags']
     })
 
-    return {
-      exports: {
-        list: async function (): Promise<RSGame[]> {
-          return await privateClient.getAll(GAMES_PATH) as RSGame[]
-        },
-        save: async function (game: RSGame) {
-          if (!game.id) game.id = uuidv4()
-          await privateClient.storeObject('game', GAMES_PATH + game.id, game)
-          return game
-        },
-        remove: async function (game: RSGame|string) {
-          const path = GAMES_PATH + (typeof game === 'string' ? game : game.id)
-          await privateClient.remove(path)
-        }
+    const exports: GameModule = {
+      list: async function (): Promise<RSGame[]> {
+        const response = await privateClient.getAll(GAMES_PATH) as Record<string, RSGame>
+        return Object.keys(response).map(k => response[k]).filter(g => g.id)
+      },
+      save: async function (game: RSGame) {
+        if (!game.id) game.id = uuidv4()
+        await privateClient.storeObject('game', GAMES_PATH + game.id, game)
+        return game
+      },
+      remove: async function (game: RSGame|string) {
+        const path = GAMES_PATH + (typeof game === 'string' ? game : game.id)
+        await privateClient.remove(path)
       }
     }
+
+    return { exports }
   }
 }
 
@@ -69,8 +77,10 @@ const remoteStorage = new RemoteStorage({
   modules: [RSGameModule]
 })
 
-remoteStorage.access.claim('gm-emulator', 'rw')
-remoteStorage.caching.enable('/gm-emulator/')
+const rsGameModule = ((remoteStorage as any).gm_emulator as GameModule)
+
+remoteStorage.access.claim('gm_emulator', 'rw')
+remoteStorage.caching.enable('/gm_emulator/')
 
 const widget = new Widget(remoteStorage, { logging: true })
 
@@ -91,8 +101,6 @@ remoteStorage.on('network-offline', () => {
 remoteStorage.on('network-online', () => {
   console.debug('Hooray, we\'re back online.')
 })
-
-let inMemoryIdSeq = 1
 const inMemoryGames: Game[] = []
 
 type SceneUpdate = { index: number; name: string; context: string; summary: string }
@@ -177,13 +185,14 @@ export default new Vuex.Store({
     newGame (state: RootState, gameRef: RSGame) {
       state.games.push(gameRef)
 
-      const game = new Game()
-      game.id = gameRef.id
-      game.name = gameRef.name
-      game.tags = gameRef.tags
+      const game = new Game(gameRef)
 
       inMemoryGames.push(game)
       state.currentGame = game
+      return state
+    },
+    savedGames (state: RootState, gameRefs: RSGame[]) {
+      state.games = gameRefs
       return state
     },
     loadGame (state: RootState, id: string) {
@@ -481,14 +490,16 @@ export default new Vuex.Store({
       dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical: 'Matt va voir rassurer les chevaux qui paniquent' })
       dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical: 'La borduere de l\'enclot tombe dans le vide suite à une secousse plus forte que les autres' })
     },
-    createNewGame ({ commit /*, state */ }, payload: {name: string; tags: string[]}) {
+    async createNewGame ({ commit /*, state */ }, game: RSGame) {
       commit('loadTags')
-      const game = new GameRef()
-      game.id = 'game-' + (++inMemoryIdSeq)
-      game.name = payload.name
-      game.tags = payload.tags;
-      (remoteStorage as any).gm_emulator.save(game)
-      commit('newGame', payload)
+      await rsGameModule.save(game)
+      commit('newGame', game)
+    },
+    async listSavedGames ({ commit }) {
+      const games = await rsGameModule.list()
+        .catch((error) => { console.log(error); return [] })
+        .then((success) => success ?? [])
+      commit('savedGames', games)
     },
     loadSavedGame ({ commit }, id) {
       commit('loadTags')

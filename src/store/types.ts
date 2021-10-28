@@ -142,17 +142,22 @@ export class Game {
   sceneLogs: SceneLog[][] = []
   places: Place[] = [];
   scenes: Scene[] = [];
+  constructor ({ id, name, tags }: RSGame) {
+    this.id = id
+    this.name = name
+    this.tags = tags
+  }
 }
 
-export class GameRef {
-  id: string | null = null;
-  name = 'Partie';
-  tags: string[] = []; // also used for themes and tone
+export interface RSGame {
+  id: string;
+  name: string;
+  tags: string[]; // also used for themes and tone
 }
 
 export class RootState {
   currentGame: Game | null = null;
-  games: GameRef[] = [];
+  games: RSGame[] = [];
   tags: string[] = [];
   tagValues: {value: string; tags: string[]}[] = [];
 }

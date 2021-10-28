@@ -85,6 +85,7 @@ export default {
     }
   },
   methods: {
+    ...mapActions(['listSavedGames']),
     remove (item) {
       const index = this.tags.indexOf(item)
       if (index >= 0) this.tags.splice(index, 1)
@@ -138,8 +139,9 @@ export default {
     },
     ...mapActions(['createFakeGame'])
   },
-  mounted () {
+  async mounted () {
     this.availableTags = data.tags.concat().sort()
+    await this.listSavedGames()
   }
 }
 </script>
