@@ -4,7 +4,7 @@ import Vuex from 'vuex'
 import data from '@/assets/data.json'
 import { randomName } from '@/utils/names.ts'
 import { randomize } from '@/utils/random.ts'
-import { Character, Game, Goal, Place, RootState, Scene, SceneLog } from './types'
+import { Aspect, Character, Game, Goal, Place, RootState, Scene, SceneLog } from './types'
 
 import RemoteStorage from 'remotestoragejs'
 import Widget from 'remotestorage-widget'
@@ -18,17 +18,111 @@ function uuidv4 () {
   )
 }
 
-const GAMES_PATH = 'games/'
-interface RSGame {
-  id: string;
+/*
+/games/<uuid>/content                { created, modified, name, accessed }
+/games/<uuid>/tags/<uuid>         { created, modified, name, extends }
+/games/<uuid>/characters/<uuid>   { created, modified, name, active, player }
+/games/<uuid>/threads/<uuid>      { created, modified, name, active }
+/games/<uuid>/places/<uuid>       { created, modified, name, active }
+/games/<uuid>/scenes/<uuid>/content { created, modified, name }
+/games/<uuid>/scenes/<uuid>/logs/<uuid> { created, modified, name }
+ */
+
+interface RSEvent {
+  // Absolute path of the changed node, from the storage root
+  path: string;
+  // Path of the changed node, relative to this baseclient's scope root
+  relativePath: string;
+  // See origin descriptions below
+  origin: 'window|local|remote|conflict';
+  // Old body of the changed node (local version in conflicts; undefined if creation)
+  oldValue: any;
+  // New body of the changed node (remote version in conflicts; undefined if deletion)
+  newValue: any;
+  // Old contentType of the changed node (local version for conflicts; undefined if creation)
+  oldContentType: string;
+  // New contentType of the changed node (remote version for conflicts; undefined if deletion)
+  newContentType: string;
+  // Most recent known common ancestor body of local and remote
+  lastCommonValue: any;
+  // Most recent known common ancestor contentType of local and remote
+  lastCommonContentType: any;
+}
+
+interface RSGame extends Entity {
   name: string;
   tags: string[];
 }
 
+interface RSCharacters extends Entity {
+  name: string;
+  isPlayer: boolean;
+  isActive: boolean;
+}
+
+interface Entity {
+  id: string;
+}
+
+class Repository<T extends Entity> {
+  private readonly privateClient: BaseClient;
+  private readonly basePath: string;
+  private readonly contentSuffix: string;
+  private readonly type: string;
+
+  constructor (privateClient: BaseClient, type: string, prefix = '', hasChildren = false) {
+    this.basePath = prefix + type + 's/'
+    this.contentSuffix = (hasChildren ? '/content' : '')
+    this.type = type
+    this.privateClient = privateClient
+  }
+
+  public ensureId (entity: T) {
+    if (!entity.id) entity.id = this.basePath + uuidv4()
+  };
+
+  async list (): Promise<T[]> {
+    const response = await this.privateClient.getListing(this.basePath) as { items: Record<string, unknown> }
+    return Promise.all(
+      Object.keys(response.items)
+        .filter(item => this.basePath + item)
+        .map(id => this.get(id))
+    )
+  };
+
+  async get (id: string): Promise<T> {
+    return await this.privateClient.getObject(id + this.contentSuffix) as T
+  };
+
+  async save (entity: T) {
+    this.ensureId(entity)
+    await this.privateClient.storeObject(this.type, entity.id + this.contentSuffix, entity)
+    return entity
+  };
+
+  async remove (entityOrId: T | string): Promise<void> {
+    let id: string
+    if (typeof entityOrId === 'string') {
+      id = entityOrId
+    } else {
+      id = entityOrId.id
+    }
+    return new Promise<void>((resolve, reject) => {
+      if (id) {
+        this.privateClient.remove(id).then(() => resolve(), (err) => reject(err))
+      } else {
+        resolve()
+      }
+    })
+  }
+}
+
 interface GameModule {
   list: () => Promise<RSGame[]>;
+  get: (gameId: string) => Promise<RSGame>;
   save: (game: RSGame) => Promise<RSGame>;
-  remove: (game: RSGame|string) => any;
+  remove: (game: RSGame | string) => Promise<void>;
+  characters(game: RSGame): Repository<RSCharacters>;
 }
 
 const RSGameModule = {
@@ -52,21 +146,17 @@ const RSGameModule = {
       required: ['id', 'name', 'tags']
     })
 
-    const exports: GameModule = {
-      list: async function (): Promise<RSGame[]> {
-        const response = await privateClient.getAll(GAMES_PATH) as Record<string, RSGame>
-        return Object.keys(response).map(k => response[k]).filter(g => g.id)
-      },
-      save: async function (game: RSGame) {
-        if (!game.id) game.id = uuidv4()
-        await privateClient.storeObject('game', GAMES_PATH + game.id, game)
-        return game
-      },
-      remove: async function (game: RSGame|string) {
-        const path = GAMES_PATH + (typeof game === 'string' ? game : game.id)
-        await privateClient.remove(path)
+    privateClient.on('change', e => {
+      const event = e as RSEvent
+      console.log('EVENT: ', event)
+    })
+
+    const exports: GameModule = Object.assign(
+      new Repository<RSGame>(privateClient, 'game', '', true),
+      {
+        characters (game: RSGame) { return new Repository<RSCharacters>(privateClient, 'character', game.id, true) }
       }
-    }
+    )
 
     return { exports }
   }
@@ -136,6 +226,7 @@ export default new Vuex.Store({
       if (!state.currentGame) {
         return new Map<string, string[]>()
       }
+
       function traverseToAncestors (tag: string, mapToAncestors: Map<string, Set<string>>): Set<string> {
         const existingAncestors = mapToAncestors.get(tag)
         if (existingAncestors) {
@@ -151,6 +242,7 @@ export default new Vuex.Store({
         console.log(tag + ' => ', ancestors)
         return ancestors
       }
+
       const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]
       const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends))]
       const childrenTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.tag))]
@@ -361,25 +453,64 @@ export default new Vuex.Store({
       dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Read (Thomas)' })
       dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Eilissa (Marjo)' })
       dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Ruby (Margot)' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Batea, espion repenti de la CCA, petit ami de Liani' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Liani, espion de la CCA, petite amie de Batea' })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Batea, espion repenti de la CCA, petit ami de Liani'
+      })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Liani, espion de la CCA, petite amie de Batea'
+      })
       dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Gustav Gregor Damaske, Hexe [Scélérat]' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Kabu, chasseur, phobie de la mer, fils de l\'ancêtre Nasa (H)' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Grand-Mère Nan, fille de l\'ancêtre Karaya (F)' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Tit\'Nan, pêcheuse de perles, petite fille de Grand-Mère Nan' })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Kabu, chasseur, phobie de la mer, fils de l\'ancêtre Nasa (H)'
+      })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Grand-Mère Nan, fille de l\'ancêtre Karaya (F)'
+      })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Tit\'Nan, pêcheuse de perles, petite fille de Grand-Mère Nan'
+      })
       dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Enoon, marchand de perles' })
       dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du fort' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Enrico Munafo, Capitaine du "Vol au Vent", Agent de la CCA, Chargement d\'esclaves, [Scélérat]' })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Enrico Munafo, Capitaine du "Vol au Vent", Agent de la CCA, Chargement d\'esclaves, [Scélérat]'
+      })
       dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du port, maitre des registres' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Beeron, Agent du Riroco, Prisonnier de la CCA, Dénoncé par Batea' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Qidan, Tailleur de harpons, Veut libérer son père (Beeron), rancune contre la CCA' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Le tavernier, à la potence pour avoir "aidé les héros à s\'enfuir' })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Beeron, Agent du Riroco, Prisonnier de la CCA, Dénoncé par Batea'
+      })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Qidan, Tailleur de harpons, Veut libérer son père (Beeron), rancune contre la CCA'
+      })
+      dispatch('updateCharacter', {
+        isActive: true,
+        isPlayer: false,
+        name: 'Le tavernier, à la potence pour avoir "aidé les héros à s\'enfuir'
+      })
       dispatch('updateGoal', { isActive: true, label: 'Faire péter le fort de la CCA sur l\'île' })
       dispatch('updateGoal', { isActive: true, label: 'Faire fortune' })
       dispatch('updateGoal', { isActive: true, label: 'Boire du rhum' })
       dispatch('updateGoal', { isActive: true, label: 'Protéger sa/la liberté' })
       dispatch('updatePlace', { isActive: true, name: 'Le port, les personnages y  sont recherchés' })
-      dispatch('updatePlace', { isActive: true, name: 'Le fort, de la poudre et des esclaves y sont enfermés avant d\'être vendus en Jaragua' })
+      dispatch('updatePlace', {
+        isActive: true,
+        name: 'Le fort, de la poudre et des esclaves y sont enfermés avant d\'être vendus en Jaragua'
+      })
       dispatch('updatePlace', { isActive: true, name: 'La planque de Batea et Liana' })
       dispatch('updatePlace', { isActive: true, name: 'La planque de l\'Hexe, un cabanon  dans la jungle' })
       dispatch('updatePlace', { isActive: true, name: 'Le volcan, Ambiance sulfureuse (on y trouve du souffre)' })
@@ -477,7 +608,10 @@ export default new Vuex.Store({
       }
       await dispatch('closeCurrentGame')
       // Matt le fermier
-      await dispatch('createNewGame', { name: 'Matt le fermier et les îles flottantes', tags: ['Dragons', 'Moyen-Age', 'Fantasy', 'Pirates'] })
+      await dispatch('createNewGame', {
+        name: 'Matt le fermier et les îles flottantes',
+        tags: ['Dragons', 'Moyen-Age', 'Fantasy', 'Pirates']
+      })
       await dispatch('updateScene', {
         index: -1,
         name: 'L\'Effondrement',
@@ -488,7 +622,10 @@ export default new Vuex.Store({
       dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Matt le fermier' })
 
       dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical: 'Matt va voir rassurer les chevaux qui paniquent' })
-      dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical: 'La borduere de l\'enclot tombe dans le vide suite à une secousse plus forte que les autres' })
+      dispatch('updateSceneLog', {
+        icon: 'fas fa-bolt',
+        mechanical: 'La borduere de l\'enclot tombe dans le vide suite à une secousse plus forte que les autres'
+      })
     },
     async createNewGame ({ commit /*, state */ }, game: RSGame) {
       commit('loadTags')
@@ -497,7 +634,10 @@ export default new Vuex.Store({
     },
     async listSavedGames ({ commit }) {
       const games = await rsGameModule.list()
-        .catch((error) => { console.log(error); return [] })
+        .catch((error) => {
+          console.log(error)
+          return []
+        })
         .then((success) => success ?? [])
       commit('savedGames', games)
     },
@@ -636,6 +776,5 @@ export default new Vuex.Store({
       widget.attach('remotestorage-widget')
     }
   },
-  modules: {
-  }
+  modules: {}
 })
