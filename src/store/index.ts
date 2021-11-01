@@ -91,12 +91,16 @@ class Repository<T extends Entity> {
   };
 
   async get (id: string): Promise<T> {
-    return await this.privateClient.getObject(id + this.contentSuffix) as T
+    const path = id + this.contentSuffix
+    console.log('GETTING: ', path)
+    return await this.privateClient.getObject(path) as T
   };
 
   async save (entity: T) {
     this.ensureId(entity)
-    await this.privateClient.storeObject(this.type, entity.id + this.contentSuffix, entity)
+    const path = entity.id + this.contentSuffix
+    console.log('SAVING: ', path, entity)
+    await this.privateClient.storeObject(this.type, path, entity)
     return entity
   };
 
