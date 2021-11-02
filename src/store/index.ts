@@ -82,11 +82,13 @@ class Repository<T extends Entity> {
   };
 
   async list (): Promise<T[]> {
-    const response = await this.privateClient.getListing(this.basePath) as { items: Record<string, unknown> }
+    const response = await this.privateClient.getListing(this.basePath) as Record<string, unknown>
+    console.log('RESPONSE: ', response)
     return Promise.all(
-      Object.keys(response.items)
-        .filter(item => this.basePath + item)
-        .map(id => this.get(id))
+      Object.keys(response)
+        .filter(item => response[item] && item !== 'content')
+        .map(item => item.replace(/\/$/, ''))
+        .map(id => this.get(this.basePath + id + this.contentSuffix))
     )
   };
 
