@@ -49,7 +49,8 @@
       <v-card-title>Charger une partie</v-card-title>
       <v-card-text>
         <ul v-for="item in games" :key="item.id">
-          <li><a @click="loadGame(item.id)">{{ item.name }} <small>({{item.tags.join(', ')}})</small></a> </li>
+          <li><a @click="loadGame(item.id)">{{ item.name }} <small>({{item.tags.join(', ')}})</small></a>
+            (<a @click="deleteGame(item.id)">X</a>)</li>
         </ul>
         <i v-if="!games.length">Aucune partie sauvegardée</i>
       </v-card-text>
@@ -85,7 +86,7 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['listSavedGames']),
+    ...mapActions(['listSavedGames', 'deleteGame']),
     remove (item) {
       const index = this.tags.indexOf(item)
       if (index >= 0) this.tags.splice(index, 1)

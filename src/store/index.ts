@@ -83,25 +83,20 @@ class Repository<T extends Entity> {
 
   async list (): Promise<T[]> {
     const response = await this.privateClient.getListing(this.basePath) as Record<string, unknown>
-    console.log('RESPONSE: ', response)
-    return Promise.all(
-      Object.keys(response)
-        .filter(item => response[item] && item !== 'content')
-        .map(item => item.replace(/\/$/, ''))
-        .map(id => this.get(this.basePath + id + this.contentSuffix))
-    )
+    const ids = Object.keys(response)
+      .filter(item => response[item] && item !== 'content')
+      .map(item => item.replace(/\/$/, ''))
+    return Promise.all(ids.map(id => this.get(this.basePath + id)))
   };
 
   async get (id: string): Promise<T> {
     const path = id + this.contentSuffix
-    console.log('GETTING: ', path)
     return await this.privateClient.getObject(path) as T
   };
 
   async save (entity: T) {
     this.ensureId(entity)
     const path = entity.id + this.contentSuffix
-    console.log('SAVING: ', path, entity)
     await this.privateClient.storeObject(this.type, path, entity)
     return entity
   };
@@ -302,6 +297,14 @@ export default new Vuex.Store({
       }
 
       return state
+    },
+    deleteGame (state: RootState, id: string) {
+      const game = inMemoryGames.find(g => g.id === id)
+      if (game) {
+        state.currentGame = game
+      } else {
+        throw new Error('Unable to delete game with id: ' + id)
+      }
     },
     closeGame (state: RootState) {
       state.currentGame = null
@@ -641,7 +644,7 @@ export default new Vuex.Store({
     async listSavedGames ({ commit }) {
       const games = await rsGameModule.list()
         .catch((error) => {
-          console.log(error)
+          console.error(error)
           return []
         })
         .then((success) => success ?? [])
@@ -650,6 +653,10 @@ export default new Vuex.Store({
     loadSavedGame ({ commit }, id) {
       commit('loadTags')
       commit('loadGame', id)
+    },
+    async deleteGame ({ commit }, id) {
+      await rsGameModule.remove(id)
+      commit('deleteGame', id)
     },
     closeCurrentGame ({ commit }) {
       commit('closeGame')
