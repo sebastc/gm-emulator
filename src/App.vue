@@ -26,11 +26,12 @@
       </v-toolbar-items>
     </v-app-bar>
 
-    <v-content>
+    <v-main>
       <v-container>
         <router-view></router-view>
       </v-container>
-    </v-content>
+    </v-main>
+    <v-footer app>{{ footerText }}</v-footer>
   </v-app>
 </template>
 
@@ -51,7 +52,10 @@ export default Vue.extend({
   }),
   computed: {
     ...mapState(['currentGame']),
-    ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters'])
+    ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters']),
+    footerText () {
+      return `Git Hash: '${process?.env?.VUE_APP_GIT_HASH ?? 'N/A'}'`
+    }
   },
   watch: {
     $route: {
