@@ -101,20 +101,20 @@ class Repository<T extends Entity> {
     return entity
   };
 
-  async remove (entityOrId: T | string): Promise<void> {
+  async remove (entityOrId: T | string): Promise<unknown> {
     let id: string
     if (typeof entityOrId === 'string') {
       id = entityOrId
     } else {
       id = entityOrId.id
     }
-    return new Promise<void>((resolve, reject) => {
-      if (id) {
-        this.privateClient.remove(id).then(() => resolve(), (err) => reject(err))
-      } else {
-        resolve()
-      }
-    })
+    return this.recursiveRemove(id).then(x => console.log('Promised result', x))
+  }
+
+  private async recursiveRemove (path: string): Promise<unknown> {
+    const obj = await this.privateClient.getObject(path)
+    console.log('OBJECT TO DELETE: ', obj)
+    return this.privateClient.remove(path)
   }
 }
 
@@ -122,7 +122,7 @@ interface GameModule {
   list: () => Promise<RSGame[]>;
   get: (gameId: string) => Promise<RSGame>;
   save: (game: RSGame) => Promise<RSGame>;
-  remove: (game: RSGame | string) => Promise<void>;
+  remove: (game: RSGame | string) => Promise<unknown>;
   characters(game: RSGame): Repository<RSCharacters>;
 }
 

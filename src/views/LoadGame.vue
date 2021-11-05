@@ -50,7 +50,7 @@
       <v-card-text>
         <ul v-for="item in games" :key="item.id">
           <li><a @click="loadGame(item.id)">{{ item.name }} <small>({{item.tags.join(', ')}})</small></a>
-            (<a @click="deleteGame(item.id)">X</a>)</li>
+            (<a @click="deleteGame(item.id)"><v-icon>far fa-trash-alt</v-icon></a>)</li>
         </ul>
         <i v-if="!games.length">Aucune partie sauvegardée</i>
       </v-card-text>
