@@ -4,19 +4,26 @@ import Vuex from 'vuex'
 import data from '@/assets/data.json'
 import { randomName } from '@/utils/names.ts'
 import { randomize } from '@/utils/random.ts'
-import { Aspect, Character, Game, Goal, Place, RootState, Scene, SceneLog } from './types'
+import {
+  RSGame,
+  RSCharacter,
+  Repository,
+  Aspect,
+  Character,
+  Game,
+  Goal,
+  Place,
+  RootState,
+  Scene,
+  SceneLog,
+  Entity
+} from './types'
 
 import RemoteStorage from 'remotestoragejs'
 import Widget from 'remotestorage-widget'
 import BaseClient from 'remotestoragejs/release/types/baseclient'
 
 Vue.use(Vuex)
-
-function uuidv4 () {
-  return ('' + 1e7 + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c: string) =>
-    (parseInt(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> parseInt(c) / 4).toString(16)
-  )
-}
 
 /*
 /games/<uuid>/content                { created, modified, name, accessed }
@@ -28,7 +35,7 @@ function uuidv4 () {
 /games/<uuid>/scenes/<uuid>/logs/<uuid> { created, modified, name }
  */
 
-interface RSEvent {
+export interface RSEvent {
   // Absolute path of the changed node, from the storage root
   path: string;
   // Path of the changed node, relative to this baseclient's scope root
@@ -49,81 +56,12 @@ interface RSEvent {
   lastCommonContentType: any;
 }
 
-interface RSGame extends Entity {
-  name: string;
-  tags: string[];
-}
-
-interface RSCharacters extends Entity {
-  name: string;
-  isPlayer: boolean;
-  isActive: boolean;
-}
-
-interface Entity {
-  id: string;
-}
-
-class Repository<T extends Entity> {
-  private readonly privateClient: BaseClient;
-  private readonly basePath: string;
-  private readonly contentSuffix: string;
-  private readonly type: string;
-
-  constructor (privateClient: BaseClient, type: string, prefix = '', hasChildren = false) {
-    this.basePath = prefix + type + 's/'
-    this.contentSuffix = (hasChildren ? '/content' : '')
-    this.type = type
-    this.privateClient = privateClient
-  }
-
-  public ensureId (entity: T) {
-    if (!entity.id) entity.id = this.basePath + uuidv4()
-  };
-
-  async list (): Promise<T[]> {
-    const response = await this.privateClient.getListing(this.basePath) as Record<string, unknown>
-    const ids = Object.keys(response)
-      .filter(item => response[item] && item !== 'content')
-      .map(item => item.replace(/\/$/, ''))
-    return Promise.all(ids.map(id => this.get(this.basePath + id)))
-  };
-
-  async get (id: string): Promise<T> {
-    const path = id + this.contentSuffix
-    return await this.privateClient.getObject(path) as T
-  };
-
-  async save (entity: T) {
-    this.ensureId(entity)
-    const path = entity.id + this.contentSuffix
-    await this.privateClient.storeObject(this.type, path, entity)
-    return entity
-  };
-
-  async remove (entityOrId: T | string): Promise<unknown> {
-    let id: string
-    if (typeof entityOrId === 'string') {
-      id = entityOrId
-    } else {
-      id = entityOrId.id
-    }
-    return this.recursiveRemove(id).then(x => console.log('Promised result', x))
-  }
-
-  private async recursiveRemove (path: string): Promise<unknown> {
-    const obj = await this.privateClient.getObject(path)
-    console.log('OBJECT TO DELETE: ', obj)
-    return this.privateClient.remove(path)
-  }
-}
-
-interface GameModule {
+export interface GameModule {
   list: () => Promise<RSGame[]>;
   get: (gameId: string) => Promise<RSGame>;
   save: (game: RSGame) => Promise<RSGame>;
-  remove: (game: RSGame | string) => Promise<unknown>;
-  characters(game: RSGame): Repository<RSCharacters>;
+  remove: (game: RSGame | string) => Promise<void>;
+  characters(game: RSGame): Repository<RSCharacter>;
 }
 
 const RSGameModule = {
@@ -146,6 +84,20 @@ const RSGameModule = {
       },
       required: ['id', 'name', 'tags']
     })
+    privateClient.declareType('character', {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string'
+        },
+        name: {
+          type: 'string'
+        },
+        isPlayer: { type: 'boolean' },
+        isActive: { type: 'boolean' }
+      },
+      required: ['id', 'name', 'isPlayer', 'isActive']
+    })
 
     privateClient.on('change', e => {
       const event = e as RSEvent
@@ -155,7 +107,7 @@ const RSGameModule = {
     const exports: GameModule = Object.assign(
       new Repository<RSGame>(privateClient, 'game', '', true),
       {
-        characters (game: RSGame) { return new Repository<RSCharacters>(privateClient, 'character', game.id, true) }
+        characters (game: RSGame) { return new Repository<RSCharacter>(privateClient, 'character', game.id, true) }
       }
     )
 
@@ -208,14 +160,20 @@ function cleanupRandomConstruct (s: string) {
   return s.replace(/\b([dl])[ea] ([AEIUOY])/gim, '$1\'$2')
 }
 
+function mergeInto<T extends Entity> (list: T[], elt: T) {
+  const idx = list.findIndex(e => e.id === elt.id)
+  if (idx < 0) list.splice(list.length, 0, elt)
+  else list.splice(idx, 1, elt)
+}
+
 export default new Vuex.Store({
   state: new RootState(),
   getters: {
-    activePlayerCharacters (state: RootState): Character[] {
-      return state.currentGame ? state.currentGame.characters.filter(c => c.isActive && c.isPlayer) : []
+    activePlayerCharacters (state: RootState): RSCharacter[] {
+      return (state.current?.characters ?? []).filter(c => c.isActive && c.isPlayer)
     },
-    activeNonPlayerCharacters (state: RootState): Character[] {
-      return state.currentGame ? state.currentGame.characters.filter(c => c.isActive && !c.isPlayer) : []
+    activeNonPlayerCharacters (state: RootState): RSCharacter[] {
+      return (state.current?.characters ?? []).filter(c => c.isActive && !c.isPlayer)
     },
     activePlaces (state: RootState): Place[] {
       return state.currentGame ? state.currentGame.places.filter(c => c.isActive) : []
@@ -275,38 +233,50 @@ export default new Vuex.Store({
     }
   },
   mutations: {
-    newGame (state: RootState, gameRef: RSGame) {
-      state.games.push(gameRef)
-
-      const game = new Game(gameRef)
-
-      inMemoryGames.push(game)
-      state.currentGame = game
-      return state
-    },
-    savedGames (state: RootState, gameRefs: RSGame[]) {
-      state.games = gameRefs
-      return state
-    },
-    loadGame (state: RootState, id: string) {
-      const game = inMemoryGames.find(g => g.id === id)
-      if (game) {
-        state.currentGame = game
-      } else {
-        throw new Error('Unable to load game with id: ' + id)
+    newGame (state: RootState, game: RSGame) {
+      mergeInto(state.games, game)
+      state.current = {
+        game,
+        characters: []
       }
 
+      // FIXME temporary fix to delete
+      inMemoryGames.splice(inMemoryGames.length, 0, state.currentGame = new Game(game))
+    },
+    savedGames (state: RootState, gameRefs: RSGame[]) {
+      state.games = [...gameRefs]
       return state
     },
+    loadGame (state: RootState, { game, characters }: { game: RSGame; characters: RSCharacter[]}) {
+      state.current = {
+        game,
+        characters
+      }
+
+      // FIXME temporary fix to delete
+      inMemoryGames.splice(inMemoryGames.length, 0, state.currentGame = new Game(game))
+    },
     deleteGame (state: RootState, id: string) {
-      const game = inMemoryGames.find(g => g.id === id)
-      if (game) {
-        state.currentGame = game
-      } else {
-        throw new Error('Unable to delete game with id: ' + id)
+      if (state.current?.game?.id === id) {
+        state.current = undefined
+
+        // FIXME temporary fix to delete
+        state.currentGame = null
+      }
+      const idx = state.games.findIndex(g => g.id === id)
+      if (idx >= 0) {
+        state.games.splice(idx, 1)
+      }
+      // FIXME implement `inMemoryGames` cleanup
+      const idx2 = inMemoryGames.findIndex(g => g.id === id)
+      if (idx2 >= 0) {
+        inMemoryGames.splice(idx2, 1)
       }
     },
     closeGame (state: RootState) {
+      state.current = undefined
+
+      // FIXME temporary fix to delete
       state.currentGame = null
     },
     updateScene (state: RootState, update: SceneUpdate) {
@@ -331,18 +301,21 @@ export default new Vuex.Store({
         scene.summary = update.summary
       }
     },
-    updateCharacter (state: RootState, update: CharacterUpdate) {
+    updateCharacter (state: RootState, update: RSCharacter) {
+      if (!state.current) {
+        throw Error('No loaded game')
+      }
+      if (!update.id) {
+        throw Error('Character has no id')
+      }
+      mergeInto(state.current.characters, update)
+
+      // FIXME temporary fix to delete
       if (!state.currentGame) {
         throw Error('No loaded game')
       }
-      let index = update.index ?? -1
-      if (index < 0) {
-        index = state.currentGame.characters.length
-        state.currentGame.characters.push(new Character(index))
-      } else if (index >= state.currentGame.characters.length) {
-        throw Error('No character at index: ' + index)
-      }
-      const character = state.currentGame.characters[index]
+      const character = new Character(update.id)
+      mergeInto(state.currentGame.characters, character)
       if (update.name !== undefined) {
         character.name = update.name
       }
@@ -638,21 +611,17 @@ export default new Vuex.Store({
     },
     async createNewGame ({ commit /*, state */ }, game: RSGame) {
       commit('loadTags')
-      await rsGameModule.save(game)
-      commit('newGame', game)
+      commit('newGame', await rsGameModule.save(game))
     },
     async listSavedGames ({ commit }) {
-      const games = await rsGameModule.list()
-        .catch((error) => {
-          console.error(error)
-          return []
-        })
-        .then((success) => success ?? [])
-      commit('savedGames', games)
+      commit('savedGames', await rsGameModule.list())
     },
-    loadSavedGame ({ commit }, id) {
+    async loadSavedGame ({ commit }, id) {
       commit('loadTags')
-      commit('loadGame', id)
+      const game = await rsGameModule.get(id)
+      const characters = await rsGameModule.characters(game).list()
+      console.log('CHARACTERS: ', characters)
+      commit('loadGame', { game, characters })
     },
     async deleteGame ({ commit }, id) {
       await rsGameModule.remove(id)
@@ -664,7 +633,9 @@ export default new Vuex.Store({
     updateScene ({ commit }, payload: SceneUpdate) {
       commit('updateScene', payload)
     },
-    updateCharacter ({ commit }, payload: CharacterUpdate) {
+    async updateCharacter ({ commit, state }, payload: RSCharacter) {
+      if (!state.current) throw Error('No loaded game')
+      await rsGameModule.characters(state.current.game).save(payload)
       commit('updateCharacter', payload)
     },
     updatePlace ({ commit, getters }, payload: PlaceUpdate) {

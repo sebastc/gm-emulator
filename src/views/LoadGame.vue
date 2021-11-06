@@ -49,8 +49,10 @@
       <v-card-title>Charger une partie</v-card-title>
       <v-card-text>
         <ul v-for="item in games" :key="item.id">
-          <li><a @click="loadGame(item.id)">{{ item.name }} <small>({{item.tags.join(', ')}})</small></a>
-            (<a @click="deleteGame(item.id)"><v-icon>far fa-trash-alt</v-icon></a>)</li>
+          <li>
+            <a @click="loadGame(item.id)">{{ item.name }} <small>({{item.tags.join(', ')}})</small></a>
+            <a @click="deleteGame(item.id)" class="ml-2"><v-icon small color="secondary">far fa-trash-alt</v-icon></a>
+          </li>
         </ul>
         <i v-if="!games.length">Aucune partie sauvegardée</i>
       </v-card-text>
@@ -127,16 +129,16 @@ export default {
       }
       return res
     },
-    submit () {
+    async submit () {
       if (!this.$refs.newGameForm.validate()) {
         return false
       }
-      this.$store.dispatch('createNewGame', { name: this.name, tags: this.tags })
-      this.$router.push('game')
+      await this.$store.dispatch('createNewGame', { name: this.name, tags: this.tags })
+      await this.$router.push('game')
     },
-    loadGame (id) {
-      this.$store.dispatch('loadSavedGame', id)
-      this.$router.push('game')
+    async loadGame (id) {
+      await this.$store.dispatch('loadSavedGame', id)
+      await this.$router.push('game')
     },
     ...mapActions(['createFakeGame'])
   },

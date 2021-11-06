@@ -12,13 +12,13 @@
           class="ml-0 pl-4"
         >
           <span class="hidden-sm-and-down title">GM Emulator</span>
-          <span v-if="currentGame" class="subtitle-1"><span class="hidden-sm-and-down"> — </span>{{ currentGame.name }}</span>
+          <span v-if="current" class="subtitle-1"><span class="hidden-sm-and-down"> — </span>{{ current.game.name }}</span>
         </v-toolbar-title>
 
       <v-spacer></v-spacer>
 
       <v-toolbar-items>
-        <v-btn icon to='/lists' v-if="currentGame && $route.name !== 'Lists'" :disabled="!currentGame.characters.length && !currentGame.goals.length">
+        <v-btn icon to='/lists' v-if="current && current.game && $route.name !== 'Lists'" :disabled="!current.characters.length && !current.goals.length">
           <v-icon>far fa-list-alt</v-icon>
         </v-btn>
         <v-btn icon to='/tags' v-if="$route.name !== 'Tags'"><v-icon>fas fa-tags</v-icon></v-btn>
@@ -52,7 +52,7 @@ export default Vue.extend({
     //
   }),
   computed: {
-    ...mapState(['currentGame']),
+    ...mapState(['current']),
     ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters']),
     footerText () {
       return `Git Hash: '${process?.env?.VUE_APP_GIT_HASH ?? 'N/A'}'`
@@ -65,8 +65,8 @@ export default Vue.extend({
     $route: {
       handler (to, from) {
         let title = to.meta.title || 'GM Emulator'
-        if (this && this.currentGame) {
-          title += ' | ' + this.currentGame.name
+        if (this?.current?.game) {
+          title += ' | ' + this.current.game.name
         }
         document.title = title
       },

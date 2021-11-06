@@ -21,7 +21,7 @@ export default {
   name: 'EditCharacter',
   components: { EditDialog },
   props: {
-    index: Number
+    index: String
   },
   data () {
     return {
@@ -39,19 +39,23 @@ export default {
     },
     onSave (isNew) {
       this.updateCharacter({
-        index: isNew ? -1 : this.index,
+        id: isNew ? undefined : this.index,
         name: this.name,
-        isPlayer: this.isPlayer
+        isPlayer: this.isPlayer,
+        isActive: true
       })
     },
     onReset (isModification) {
       if (isModification) {
-        this.name = this.currentGame.characters[this.index].name
-        this.isPlayer = this.currentGame.characters[this.index].isPlayer
-      } else {
-        this.name = randomName()
-        this.isPlayer = false
+        const original = this.currentGame.characters.find(c => c.id === this.index)
+        if (original) {
+          this.name = original.name
+          this.isPlayer = original.isPlayer
+          return
+        }
       }
+      this.name = randomName()
+      this.isPlayer = false
     }
   }
 }

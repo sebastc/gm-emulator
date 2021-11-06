@@ -7,10 +7,12 @@
     "build": "vue-cli-service build",
     "test:unit": "vue-cli-service test:unit",
     "test:e2e": "vue-cli-service test:e2e",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "ui": "vue ui"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.8.2",
+    "@vue/cli": "^4.5.15",
     "core-js": "^3.6.4",
     "git-describe": "^4.1.0",
     "npm-merge-driver": "^2.3.6",

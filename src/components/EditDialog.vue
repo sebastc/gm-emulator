@@ -52,7 +52,7 @@ export default {
       type: String,
       default: ''
     },
-    index: Number
+    index: String
   },
   data () {
     return {
@@ -61,7 +61,7 @@ export default {
   },
   computed: {
     isModification () {
-      return this.$props.index >= 0
+      return !!this.$props.index
     },
     isNew () {
       return !this.isModification
