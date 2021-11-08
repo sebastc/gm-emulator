@@ -15,7 +15,7 @@ import { VBtn, VIcon } from 'vuetify/lib'
 @Component({
   components: { VBtn, VIcon },
   methods: { ...mapActions(['closeCurrentGame']) },
-  computed: { ...mapState(['currentGame']) }
+  computed: { ...mapState(['current']) }
 })
 export default class GameBtn extends Vue {
   /* Expose mapped store actions */
@@ -46,7 +46,7 @@ export default class GameBtn extends Vue {
 
   closeGame () {
     this.closeCurrentGame()
-    this.routerPush('/')
+    this.routerPush('/load')
   }
 
   get isOnGamePage (): boolean {
@@ -62,7 +62,7 @@ export default class GameBtn extends Vue {
   }
 
   get isGameLoaded (): boolean {
-    return !!this.$store.state.currentGame
+    return !!this.$store.state.current?.game
   }
 
   get isGo (): boolean {

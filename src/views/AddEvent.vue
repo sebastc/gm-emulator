@@ -1,7 +1,7 @@
 <template>
   <v-tooltip top>
     <template v-slot:activator="{ on }">
-      <v-btn color="primary" fab small class="mr-2" v-on="on" :disabled="!currentGame.scenes.length" @click="addEvent">
+      <v-btn color="primary" fab small class="mr-2" v-on="on" :disabled="disabled" @click="addEvent">
         <v-icon small>fas fa-bolt</v-icon>
       </v-btn>
     </template>
@@ -16,7 +16,10 @@ export default {
   props: {
   },
   computed: {
-    ...mapState(['currentGame'])
+    ...mapState(['current']),
+    disabled () {
+      return !this.current.scenes?.length ?? 0
+    }
   },
   methods: {
     ...mapActions(['randomEvent']),

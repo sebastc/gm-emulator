@@ -1,5 +1,5 @@
 <template>
-    <edit-dialog title="Scène" icon="far fa-image" @reset="onReset" @save="onSave" :index="index" :disabled="isDisabled">
+    <edit-dialog title="Scène" icon="far fa-image" @reset="onReset" @save="onSave" :id="id" :disabled="isDisabled">
       <template>
         <v-textarea v-if="isPrevSummaryEnabled" auto-grow outlined clearable v-model="prevSummary"
                     label="Résumé de la scène précédente" class="mt-2"
@@ -27,7 +27,7 @@ export default {
   name: 'EditScene',
   components: { EditDialog },
   props: {
-    index: Number
+    id: String
   },
   data () {
     return {
@@ -38,19 +38,19 @@ export default {
     }
   },
   computed: {
-    ...mapState(['currentGame']),
-    ...mapGetters(['activeTagsByType', 'activePlayerCharacters', 'activePlaces']),
+    ...mapState(['current']),
+    ...mapGetters(['activePlayerCharacters', 'activePlaces']),
     isNew () {
       return !this.isModification
     },
     isModification () {
-      return this.index >= 0
+      return !!this.id
     },
     sceneCount () {
-      return this.currentGame.scenes.length
+      return this.current?.scenes?.length ?? 0
     },
     isLastScene () {
-      return this.sceneCount - 1 === this.index
+      return this.current?.scenes?.[this.sceneCount - 1]?.id === this.id
     },
     isPrevSummaryEnabled () {
       return this.isNew && this.sceneCount > 0
@@ -59,45 +59,36 @@ export default {
       return this.isModification && !this.isLastScene
     },
     isDisabled () {
-      return !this.activePlayerCharacters.length || !this.currentGame.goals.length
+      return !this.activePlayerCharacters.length || !this.current.goals.length
     }
   },
   methods: {
-    ...mapActions(['updateScene']),
+    ...mapActions(['updateScene', 'getSceneById']),
     newRandomContext () {
-      const place = Math.random() > 0.5 && this.activePlaces.length > 0 ? randomize(this.activePlaces).name : randomize(this.activeTagsByType.get('__place'))
-      this.context = ' - Lieu : ' + place + '\n - action : ' +
-        randomize(this.activeTagsByType.get('__action')) + '\n - objet : ' +
-        randomize(this.activeTagsByType.get('__action_object'))
+      const place = Math.random() > 0.5 && this.activePlaces.length > 0 ? randomize(this.activePlaces).name : randomize(this.current.game.tagsByType.__place)
+      const action = randomize(this.current.game.tagsByType.__action)
+      const object = randomize(this.current.game.tagsByType.__action_object)
+      this.context = ` - Lieu : ${place}
+ - action : ${action}
+ - objet : ${object}`
     },
     onSave (isNew) {
       if (isNew) {
         if (this.isPrevSummaryEnabled) {
-          this.updateScene({
-            index: this.sceneCount - 1,
-            summary: this.prevSummary
-          })
+          this.updateScene({ ...this.current.scenes[this.sceneCount - 1], summary: this.prevSummary })
         }
-        this.updateScene({
-          index: -1,
-          name: this.name,
-          context: this.context,
-          summary: ''
-        })
+        this.updateScene({ id: undefined, name: this.name, context: this.context, summary: '', isActive: true, isChanged: false, isInterrupted: false })
       } else {
-        this.updateScene({
-          index: this.index,
-          name: this.name,
-          context: this.context,
-          summary: this.summary
-        })
+        this.updateScene({ id: this.id, name: this.name, context: this.context, summary: this.summary, isActive: true, isChanged: false, isInterrupted: false })
       }
     },
-    onReset (isModification) {
+    async onReset (isModification) {
       if (isModification) {
-        this.name = this.currentGame.scenes[this.index].name
-        this.context = this.currentGame.scenes[this.index].context
-        this.summary = this.currentGame.scenes[this.index].summary
+        const sceneById = await this.getSceneById(this.id)
+        const { name, context, summary } = sceneById
+        this.name = name
+        this.context = context
+        this.summary = summary
       } else {
         this.name = ''
         this.context = ''

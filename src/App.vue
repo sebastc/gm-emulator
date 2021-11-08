@@ -18,7 +18,7 @@
       <v-spacer></v-spacer>
 
       <v-toolbar-items>
-        <v-btn icon to='/lists' v-if="current && current.game && $route.name !== 'Lists'" :disabled="!current.characters.length && !current.goals.length">
+        <v-btn icon to='/lists' v-if="current && current.game && $route.name !== 'Lists'" :disabled="disabled">
           <v-icon>far fa-list-alt</v-icon>
         </v-btn>
         <v-btn icon to='/tags' v-if="$route.name !== 'Tags'"><v-icon>fas fa-tags</v-icon></v-btn>
@@ -54,6 +54,11 @@ export default Vue.extend({
   computed: {
     ...mapState(['current']),
     ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters']),
+    disabled () {
+      return !(
+        this.current?.characters?.length || this.current?.goals?.length || this.current?.places?.length
+      )
+    },
     footerText () {
       return `Git Hash: '${process?.env?.VUE_APP_GIT_HASH ?? 'N/A'}'`
     }

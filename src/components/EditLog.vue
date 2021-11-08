@@ -1,5 +1,5 @@
 <template>
-    <edit-dialog title="Log" :icon="icon || 'fas fa-bolt'" @reset="onReset" @save="onSave" :index="index">
+    <edit-dialog title="Log" :icon="icon || 'fas fa-bolt'" @reset="onReset" @save="onSave" :id="id">
       <template>
         <div class="mt-2">
           <div v-if="mechanical">
@@ -24,7 +24,7 @@ export default {
   name: 'EditLog',
   components: { EditDialog, Tag },
   props: {
-    index: Number
+    id: String
   },
   data () {
     return {
@@ -36,28 +36,27 @@ export default {
     }
   },
   computed: {
-    ...mapState(['currentGame'])
   },
   methods: {
-    ...mapActions(['updateSceneLog']),
+    ...mapActions(['updateSceneLog', 'getLogById']),
     onSave (isNew) {
       this.updateSceneLog({
-        index: isNew ? -1 : this.index,
+        id: this.id,
         icon: this.icon,
         avatar: this.avatar,
         mechanical: this.mechanical,
         interpretation: this.interpretation,
-        inspirations: [...this.inspirations]
+        inspirations: [...this.inspirations ?? []]
       })
     },
-    onReset (isModification) {
+    async onReset (isModification) {
       if (isModification) {
-        const item = this.currentGame.logs[this.index]
+        const item = await this.getLogById(this.id)
         this.icon = item.icon
         this.avatar = item.avatar
         this.mechanical = item.mechanical
         this.interpretation = item.interpretation
-        this.inspirations = [...item.inspirations]
+        this.inspirations = [...item.inspirations ?? []]
       } else {
         this.icon = ''
         this.avatar = ''

@@ -1,5 +1,5 @@
 <template>
-  <edit-dialog title="Lieux" icon="fas fa-place-of-worship" @reset="onReset" @save="onSave" :index="index">
+  <edit-dialog title="Lieux" icon="fas fa-place-of-worship" @reset="onReset" @save="onSave" :id="id">
     <template>
       <v-text-field label="Nom" v-model="name" hint="Nom du lieux"
                     append-icon="fas fa-dice"
@@ -11,40 +11,44 @@
 <script>
 import { randomName } from '@/utils/names'
 import EditDialog from '@/components/EditDialog'
-import { mapActions, mapGetters, mapState } from 'vuex'
+import { mapActions, mapState } from 'vuex'
 import { randomize } from '@/utils/random'
 
 export default {
   name: 'EditPlace',
   components: { EditDialog },
   props: {
-    index: Number
+    id: String
   },
   data () {
     return {
-      name: ''
+      name: '',
+      isActive: true
     }
   },
   computed: {
-    ...mapState(['currentGame']),
-    ...mapGetters(['activeTagsByType'])
+    ...mapState(['current'])
   },
   methods: {
-    ...mapActions(['updatePlace']),
+    ...mapActions(['updatePlace', 'getPlaceById']),
     newRandomPlace () {
-      this.name = randomize(this.activeTagsByType.get('__place')) + ' de ' + randomName()
+      this.name = randomize(this.current.game.tagsByType.__place) + ' de ' + randomName()
     },
     onSave (isNew) {
       this.updatePlace({
-        index: isNew ? -1 : this.index,
-        name: this.name
+        id: this.id,
+        name: this.name,
+        isActive: this.isActive
       })
     },
-    onReset (isModification) {
+    async onReset (isModification) {
       if (isModification) {
-        this.name = this.currentGame.places[this.index].name
+        const { name, isActive } = await this.getPlaceById(this.id)
+        this.name = name
+        this.isActive = isActive
       } else {
         this.newRandomPlace()
+        this.isActive = true
       }
     }
   }

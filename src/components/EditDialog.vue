@@ -28,8 +28,8 @@
         <v-divider></v-divider>
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="primary" text @click="saveDialog()">{{saveActionLabel}}</v-btn>
-          <v-btn text @click="closeDialog()">Annuler</v-btn>
+          <v-btn color="primary" text @keypress.enter="saveDialog()" @click="saveDialog()">{{saveActionLabel}}</v-btn>
+          <v-btn text @keypress.esc="closeDialog()" @click="closeDialog()">Annuler</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -52,7 +52,7 @@ export default {
       type: String,
       default: ''
     },
-    index: String
+    id: String
   },
   data () {
     return {
@@ -61,7 +61,7 @@ export default {
   },
   computed: {
     isModification () {
-      return !!this.$props.index
+      return !!this.$props.id
     },
     isNew () {
       return !this.isModification

@@ -1,12 +1,14 @@
 <template>
-  <edit-dialog title="Objectif" icon="fas fa-location-arrow" @reset="onReset" @save="onSave" :index="index" :disabled="disabled">
+  <edit-dialog title="Objectif" icon="fas fa-location-arrow" @reset="onReset" @save="onSave" :id="id" :disabled="disabled">
     <!--
       fas fa-location-arrow
       far fa-compass
       fas fa-bullseye
     -->
     <template>
-      <v-text-field label="Objectif" v-model="label" hint="Objectif poursuivi par le ou les joureurs" />
+      <v-text-field label="Objectif" v-model="label" hint="Objectif poursuivi par le ou les joureurs"
+                    append-icon="fas fa-dice"
+                    @click:append="newRandomGoal"/>
     </template>
   </edit-dialog>
 </template>
@@ -15,44 +17,48 @@
 import { randomName } from '@/utils/names'
 import EditDialog from '@/components/EditDialog'
 import { mapActions, mapState, mapGetters } from 'vuex'
+import { cleanupRandomConstruct, randomize } from '@/utils/random'
 
 export default {
   name: 'EditGoal',
   components: { EditDialog },
   props: {
-    index: Number
+    id: String
   },
   data () {
     return {
       label: '',
-      isActive: false
+      isActive: true
     }
   },
   computed: {
-    ...mapState(['currentGame']),
     ...mapGetters(['activePlayerCharacters', 'activeNonPlayerCharacters']),
+    ...mapState(['current']),
     disabled () {
       return !this.activePlayerCharacters.length || !this.activeNonPlayerCharacters.length
     }
   },
   methods: {
-    ...mapActions(['updateGoal']),
-    newRandomName () {
-      this.name = randomName()
+    ...mapActions(['updateGoal', 'getGoalById']),
+    newRandomGoal () {
+      const action = randomize(this.current.game.tagsByType.__action)
+      const object = randomize(this.current.game.tagsByType.__action_object)
+      this.label = cleanupRandomConstruct(`${action} de ${object}`)
     },
     onSave (isNew) {
       this.updateGoal({
-        index: isNew ? -1 : this.index,
+        id: this.id,
         label: this.label,
         isActive: this.isActive
       })
     },
-    onReset (isModification) {
+    async onReset (isModification) {
       if (isModification) {
-        this.label = this.currentGame.goals[this.index].label
-        this.isActive = this.currentGame.goals[this.index].isActive
+        const { label, isActive } = await this.getGoalById(this.id)
+        this.label = label
+        this.isActive = isActive
       } else {
-        this.label = ''
+        this.newRandomGoal()
         this.isActive = true
       }
     }

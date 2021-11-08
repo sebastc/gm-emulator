@@ -151,6 +151,8 @@ export class Game {
   }
 }
 
+let lastTs = 0
+
 export class Repository<T extends Entity> {
   private readonly privateClient: BaseClient;
   private readonly basePath: string;
@@ -170,7 +172,15 @@ export class Repository<T extends Entity> {
   }
 
   public ensureId (entity: T) {
-    if (!entity.id) entity.id = this.basePath + this.uuidv4()
+    if (!entity.id) {
+      entity.id = this.basePath + this.uuidv4()
+      let ts = Date.now()
+      if (ts <= lastTs) {
+        ts = lastTs + 1
+      }
+      lastTs = ts
+      entity.createdDate = ts
+    }
   };
 
   async list (): Promise<T[]> {
@@ -179,6 +189,11 @@ export class Repository<T extends Entity> {
       .filter(item => response[item] && item !== 'content')
       .map(item => item.replace(/\/$/, ''))
     return Promise.all(ids.map(id => this.get(this.basePath + id)))
+      .then(l => l.sort((a, b) => {
+        const vb = b.createdDate ?? 0
+        const va = a.createdDate ?? 0
+        return vb < va ? 1 : va < vb ? -1 : 0
+      }))
   };
 
   async get (id: string): Promise<T> {
@@ -187,9 +202,22 @@ export class Repository<T extends Entity> {
   };
 
   async save (entity: T) {
+    if (!entity) throw new Error(`Can't save ${entity} as '${this.type}' entity`)
     this.ensureId(entity)
     const path = entity.id + this.contentSuffix
-    await this.privateClient.storeObject(this.type, path, entity)
+    try {
+      Object.keys(entity).forEach(key => {
+        const k = key as keyof T
+        const v = entity[k]
+        if (typeof v === 'undefined') {
+          delete entity[k]
+        }
+      })
+      console.log('SAVING ' + this.type, entity)
+      await this.privateClient.storeObject(this.type, path, entity)
+    } catch (e) {
+      throw new Error(`Failed to store '${this.type}' entity: ${e}\n${JSON.stringify(entity)}`)
+    }
     return entity
   };
 
@@ -226,11 +254,13 @@ export class Repository<T extends Entity> {
 
 export interface Entity {
   id?: string;
+  createdDate?: number;
 }
 
 export interface RSGame extends Entity {
   name: string;
   tags: string[];
+  tagsByType: Record<string, string[]>;
 }
 
 export interface RSCharacter extends Entity {
@@ -239,14 +269,47 @@ export interface RSCharacter extends Entity {
   isActive: boolean;
 }
 
+export interface RSPlace extends Entity {
+  name: string;
+  isActive: boolean;
+  // aspects: Aspect[];
+  // people: CharacterRef[];
+}
+
+export interface RSGoal extends Entity {
+  label: string;
+  isActive: boolean;
+}
+
+export interface RSScene extends Entity {
+  name: string;
+  isActive: boolean;
+  context: string;
+  summary: string;
+  isChanged: boolean;
+  isInterrupted: boolean;
+  alteredContext?: string;
+}
+
+export interface RSLog extends Entity {
+  icon?: string;
+  avatar?: string;
+  mechanical?: string;
+  interpretation?: string;
+  inspirations?: string[];
+}
+
 export class RootState {
   current?: {
     game: RSGame;
     characters: RSCharacter[];
+    places: RSPlace[];
+    goals: RSGoal[];
+    scenes: RSScene[];
+    sceneIndex: number;
+    logs: RSLog[];
   } = undefined;
 
-  currentGame: Game | null = null;
-  currentCharacters: RSCharacter | null = null;
   games: RSGame[] = [];
   tags: string[] = [];
   tagValues: {value: string; tags: string[]}[] = [];

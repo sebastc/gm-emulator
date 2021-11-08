@@ -1,5 +1,5 @@
 <template>
-  <edit-dialog title="Personnage" icon="far fa-user-circle" @reset="onReset" @save="onSave" :index="index">
+  <edit-dialog title="Personnage" icon="far fa-user-circle" @reset="onReset" @save="onSave" :id="id">
     <template>
       <v-radio-group v-model="isPlayer" row>
         <v-radio label="Joueur (PJ)" :value="true"></v-radio>
@@ -21,7 +21,7 @@ export default {
   name: 'EditCharacter',
   components: { EditDialog },
   props: {
-    index: String
+    id: String
   },
   data () {
     return {
@@ -30,32 +30,29 @@ export default {
     }
   },
   computed: {
-    ...mapState(['currentGame'])
   },
   methods: {
-    ...mapActions(['updateCharacter']),
+    ...mapActions(['updateCharacter', 'getCharacterById']),
     newRandomName () {
       this.name = randomName()
     },
     onSave (isNew) {
       this.updateCharacter({
-        id: isNew ? undefined : this.index,
+        id: this.id,
         name: this.name,
         isPlayer: this.isPlayer,
         isActive: true
       })
     },
-    onReset (isModification) {
+    async onReset (isModification) {
       if (isModification) {
-        const original = this.currentGame.characters.find(c => c.id === this.index)
-        if (original) {
-          this.name = original.name
-          this.isPlayer = original.isPlayer
-          return
-        }
+        const { name, isPlayer } = await this.getCharacterById(this.id)
+        this.name = name
+        this.isPlayer = isPlayer
+      } else {
+        this.name = randomName()
+        this.isPlayer = false
       }
-      this.name = randomName()
-      this.isPlayer = false
     }
   }
 }

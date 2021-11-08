@@ -3,20 +3,17 @@ import Vuex from 'vuex'
 
 import data from '@/assets/data.json'
 import { randomName } from '@/utils/names.ts'
-import { randomize } from '@/utils/random.ts'
+import { cleanupRandomConstruct, randomize } from '@/utils/random.ts'
 import {
+  Repository,
+  RootState,
+  Entity,
   RSGame,
   RSCharacter,
-  Repository,
-  Aspect,
-  Character,
-  Game,
-  Goal,
-  Place,
-  RootState,
-  Scene,
-  SceneLog,
-  Entity
+  RSPlace,
+  RSGoal,
+  RSScene,
+  RSLog
 } from './types'
 
 import RemoteStorage from 'remotestoragejs'
@@ -62,6 +59,10 @@ export interface GameModule {
   save: (game: RSGame) => Promise<RSGame>;
   remove: (game: RSGame | string) => Promise<void>;
   characters(game: RSGame): Repository<RSCharacter>;
+  places(game: RSGame): Repository<RSPlace>;
+  goals(game: RSGame): Repository<RSGoal>;
+  scenes(game: RSGame): Repository<RSScene>;
+  logs(game: RSScene): Repository<RSLog>;
 }
 
 const RSGameModule = {
@@ -70,16 +71,18 @@ const RSGameModule = {
     privateClient.declareType('game', {
       type: 'object',
       properties: {
-        id: {
-          type: 'string'
-        },
-        name: {
-          type: 'string'
-        },
+        id: { type: 'string' },
+        name: { type: 'string' },
         tags: {
           type: 'array',
           items: 'string',
           minimum: 1
+        },
+        tagsByType: {
+          type: 'object',
+          patternProperties: {
+            '.*': { type: 'array', items: 'string', minimum: 1 }
+          }
         }
       },
       required: ['id', 'name', 'tags']
@@ -87,16 +90,56 @@ const RSGameModule = {
     privateClient.declareType('character', {
       type: 'object',
       properties: {
-        id: {
-          type: 'string'
-        },
-        name: {
-          type: 'string'
-        },
+        id: { type: 'string' },
+        name: { type: 'string' },
         isPlayer: { type: 'boolean' },
         isActive: { type: 'boolean' }
       },
       required: ['id', 'name', 'isPlayer', 'isActive']
+    })
+    privateClient.declareType('place', {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+        isActive: { type: 'boolean' }
+      },
+      required: ['id', 'name', 'isActive']
+    })
+    privateClient.declareType('goal', {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        label: { type: 'string' },
+        isActive: { type: 'boolean' }
+      },
+      required: ['id', 'label', 'isActive']
+    })
+    privateClient.declareType('scene', {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+        isActive: { type: 'boolean' },
+        context: { type: 'string' },
+        summary: { type: 'string' },
+        isChanged: { type: 'boolean' },
+        isInterrupted: { type: 'boolean' },
+        alteredContext: { type: 'string' }
+      },
+      required: ['id', 'name']
+    })
+    privateClient.declareType('log', {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        icon: { type: 'string' },
+        avatar: { type: 'string' },
+        mechanical: { type: 'string' },
+        interpretation: { type: 'string' },
+        inspirations: { type: 'array', items: 'string', minimum: 0 }
+      },
+      required: ['id', 'icon']
     })
 
     privateClient.on('change', e => {
@@ -107,7 +150,11 @@ const RSGameModule = {
     const exports: GameModule = Object.assign(
       new Repository<RSGame>(privateClient, 'game', '', true),
       {
-        characters (game: RSGame) { return new Repository<RSCharacter>(privateClient, 'character', game.id, true) }
+        characters (game: RSGame) { return new Repository<RSCharacter>(privateClient, 'character', game.id) },
+        places (game: RSGame) { return new Repository<RSPlace>(privateClient, 'place', game.id) },
+        goals (game: RSGame) { return new Repository<RSGoal>(privateClient, 'goal', game.id) },
+        scenes (game: RSGame) { return new Repository<RSScene>(privateClient, 'scene', game.id, true) },
+        logs (scene: RSScene) { return new Repository<RSLog>(privateClient, 'log', scene.id) }
       }
     )
 
@@ -116,7 +163,7 @@ const RSGameModule = {
 }
 
 const remoteStorage = new RemoteStorage({
-  logging: true,
+  logging: false,
   modules: [RSGameModule]
 })
 
@@ -144,26 +191,75 @@ remoteStorage.on('network-offline', () => {
 remoteStorage.on('network-online', () => {
   console.debug('Hooray, we\'re back online.')
 })
-const inMemoryGames: Game[] = []
-
-type SceneUpdate = { index: number; name: string; context: string; summary: string }
-type CharacterUpdate = { index: number; name: string; isPlayer: boolean }
-type PlaceUpdate = { index: number; name: string; isActive: boolean }
-type GoalUpdate = { index: number; label: string; isActive: boolean }
-type QuestionUpdate = { index: number; question: string; label: string; isActive: boolean }
-type SceneLogUpdate = {
-  index: number; sceneIndex: number; icon: string | undefined; avatar: string | undefined;
-  mechanical: string | undefined; interpretation: string | undefined; inspirations: string[];
-}
-
-function cleanupRandomConstruct (s: string) {
-  return s.replace(/\b([dl])[ea] ([AEIUOY])/gim, '$1\'$2')
-}
 
 function mergeInto<T extends Entity> (list: T[], elt: T) {
+  if (!elt.id) {
+    throw Error('Element has no id')
+  }
   const idx = list.findIndex(e => e.id === elt.id)
-  if (idx < 0) list.splice(list.length, 0, elt)
-  else list.splice(idx, 1, elt)
+  if (idx < 0) {
+    const insertIdx = list.length
+    list.splice(insertIdx, 0, elt)
+    return { isNew: true, index: insertIdx }
+  } else {
+    list.splice(idx, 1, elt)
+    return { isNew: false, index: idx }
+  }
+}
+
+function activeTagsByType (tags: string[]): Record<string, string[]> {
+  if (!tags.length) {
+    return {}
+  }
+
+  function traverseToAncestors (tag: string, mapToAncestors: Map<string, Set<string>>): Set<string> {
+    const existingAncestors = mapToAncestors.get(tag)
+    if (existingAncestors) {
+      return existingAncestors
+    }
+    const ancestors = new Set<string>()
+    mapToAncestors.set(tag, ancestors)
+    data.taxonomy
+      .filter(entry => entry.tag === tag)
+      .map(entry => entry.extends)
+      .flatMap(entry => [entry, ...traverseToAncestors(entry, mapToAncestors)])
+      .forEach(tags => ancestors.add(tags))
+    console.log(tag + ' => ', ancestors)
+    return ancestors
+  }
+
+  const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]
+  const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends))]
+  const childrenTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.tag))]
+  const leafTags = childrenTags.filter(t => !parentTags.includes(t))
+  console.log('leafTags', leafTags)
+  const rootTags = parentTags.filter(t => !childrenTags.includes(t))
+  console.log('rootTags', rootTags)
+  const ancestorTags: Map<string, Set<string>> = new Map<string, Set<string>>()
+  allTags.forEach(tag => traverseToAncestors(tag, ancestorTags))
+  console.log('ancestorTags', ancestorTags)
+  const actualTags = [...new Set<string>(
+    [
+      ...tags,
+      ...tags.flatMap(t => [...ancestorTags.get(t) || []])
+    ]
+  )]
+  console.log('actualTags', [...actualTags])
+
+  const actualTagsValues = [...data.values].filter(tagValue => tagValue.tags.some(tag => actualTags.includes(tag)))
+  const internalTags = ['__action', '__action_object', '__place']
+  const res = new Map<string, string[]>()
+  internalTags.forEach(iTag => {
+    res.set(iTag, [...new Set(actualTagsValues
+      .filter(tagValue => tagValue.tags.some(t => t === iTag || (ancestorTags.get(t) || new Set<string>()).has(iTag)))
+      .map(tv => tv.value))])
+  })
+  console.log('res: ', res)
+  const newObject: Record<string, string[]> = {}
+  for (const [key, value] of res) {
+    newObject[key] = value
+  }
+  return newObject
 }
 
 export default new Vuex.Store({
@@ -175,61 +271,11 @@ export default new Vuex.Store({
     activeNonPlayerCharacters (state: RootState): RSCharacter[] {
       return (state.current?.characters ?? []).filter(c => c.isActive && !c.isPlayer)
     },
-    activePlaces (state: RootState): Place[] {
-      return state.currentGame ? state.currentGame.places.filter(c => c.isActive) : []
+    activePlaces (state: RootState): RSPlace[] {
+      return (state.current?.places ?? []).filter(c => c.isActive)
     },
-    activeGoals (state: RootState): Goal[] {
-      return state.currentGame ? state.currentGame.goals.filter(c => c.isActive) : []
-    },
-    activeTagsByType (state: RootState): Map<string, string[]> {
-      if (!state.currentGame) {
-        return new Map<string, string[]>()
-      }
-
-      function traverseToAncestors (tag: string, mapToAncestors: Map<string, Set<string>>): Set<string> {
-        const existingAncestors = mapToAncestors.get(tag)
-        if (existingAncestors) {
-          return existingAncestors
-        }
-        const ancestors = new Set<string>()
-        mapToAncestors.set(tag, ancestors)
-        data.taxonomy
-          .filter(entry => entry.tag === tag)
-          .map(entry => entry.extends)
-          .flatMap(entry => [entry, ...traverseToAncestors(entry, mapToAncestors)])
-          .forEach(tags => ancestors.add(tags))
-        console.log(tag + ' => ', ancestors)
-        return ancestors
-      }
-
-      const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]
-      const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends))]
-      const childrenTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.tag))]
-      const leafTags = childrenTags.filter(t => !parentTags.includes(t))
-      console.log('leafTags', leafTags)
-      const rootTags = parentTags.filter(t => !childrenTags.includes(t))
-      console.log('rootTags', rootTags)
-      const ancestorTags: Map<string, Set<string>> = new Map<string, Set<string>>()
-      allTags.forEach(tag => traverseToAncestors(tag, ancestorTags))
-      console.log('ancestorTags', ancestorTags)
-      const actualTags = [...new Set<string>(
-        [
-          ...state.currentGame.tags,
-          ...state.currentGame.tags.flatMap(t => [...ancestorTags.get(t) || []])
-        ]
-      )]
-      console.log('actualTags', [...actualTags])
-
-      const actualTagsValues = state.tagValues.filter(tagValue => tagValue.tags.some(tag => actualTags.includes(tag)))
-      const internalTags = ['__action', '__action_object', '__place']
-      const res = new Map<string, string[]>()
-      internalTags.forEach(iTag => {
-        res.set(iTag, [...new Set(actualTagsValues
-          .filter(tagValue => tagValue.tags.some(t => t === iTag || (ancestorTags.get(t) || new Set<string>()).has(iTag)))
-          .map(tv => tv.value))])
-      })
-      console.log('res: ', res)
-      return res
+    activeGoals (state: RootState): RSGoal[] {
+      return (state.current?.goals ?? []).filter(c => c.isActive)
     }
   },
   mutations: {
@@ -237,192 +283,84 @@ export default new Vuex.Store({
       mergeInto(state.games, game)
       state.current = {
         game,
-        characters: []
+        characters: [],
+        places: [],
+        goals: [],
+        scenes: [],
+        sceneIndex: -1,
+        logs: []
       }
-
-      // FIXME temporary fix to delete
-      inMemoryGames.splice(inMemoryGames.length, 0, state.currentGame = new Game(game))
     },
-    savedGames (state: RootState, gameRefs: RSGame[]) {
-      state.games = [...gameRefs]
+    savedGames (state: RootState, games: RSGame[]) {
+      state.games = [...games]
       return state
     },
-    loadGame (state: RootState, { game, characters }: { game: RSGame; characters: RSCharacter[]}) {
-      state.current = {
-        game,
-        characters
-      }
-
-      // FIXME temporary fix to delete
-      inMemoryGames.splice(inMemoryGames.length, 0, state.currentGame = new Game(game))
+    loadGame (state: RootState, { game, characters, places, goals, scenes, sceneIndex, logs }: {
+      game: RSGame;
+      characters: RSCharacter[];
+      places: RSPlace[];
+      goals: RSGoal[];
+      scenes: RSScene[];
+      sceneIndex: number;
+      logs: RSLog[];
+    }) {
+      state.current = { game, characters, places, goals, scenes, sceneIndex, logs }
     },
     deleteGame (state: RootState, id: string) {
       if (state.current?.game?.id === id) {
         state.current = undefined
-
-        // FIXME temporary fix to delete
-        state.currentGame = null
       }
       const idx = state.games.findIndex(g => g.id === id)
       if (idx >= 0) {
         state.games.splice(idx, 1)
       }
-      // FIXME implement `inMemoryGames` cleanup
-      const idx2 = inMemoryGames.findIndex(g => g.id === id)
-      if (idx2 >= 0) {
-        inMemoryGames.splice(idx2, 1)
-      }
     },
     closeGame (state: RootState) {
       state.current = undefined
-
-      // FIXME temporary fix to delete
-      state.currentGame = null
     },
-    updateScene (state: RootState, update: SceneUpdate) {
-      if (!state.currentGame) {
+    updateScene (state: RootState, update: RSScene) {
+      if (!state.current?.game) {
         throw Error('No loaded game')
       }
-      let index = update.index ?? -1
-      if (index < 0) {
-        index = state.currentGame.scenes.length
-        state.currentGame.scenes.push(new Scene(index))
-      } else if (index >= state.currentGame.scenes.length) {
-        throw Error('No scene at index: ' + index)
+      mergeInto(state.current.scenes, update)
+    },
+    loadScene (state: RootState, { index, logs }: { index: number; logs: RSLog[] }) {
+      if (!state.current?.game) {
+        throw Error('No loaded game')
       }
-      const scene = state.currentGame.scenes[index]
-      if (update.name !== undefined) {
-        scene.name = update.name
+      state.current.sceneIndex = index
+      state.current.logs = logs
+    },
+    randomPlace (state: RootState) {
+      if (!state.current) {
+        throw Error('No loaded game')
       }
-      if (update.context !== undefined) {
-        scene.context = update.context
-      }
-      if (update.summary !== undefined) {
-        scene.summary = update.summary
-      }
+      return cleanupRandomConstruct((randomize(state.current.game.tagsByType.__place ?? []) + ' de ' + randomName()))
     },
     updateCharacter (state: RootState, update: RSCharacter) {
       if (!state.current) {
         throw Error('No loaded game')
       }
-      if (!update.id) {
-        throw Error('Character has no id')
-      }
       mergeInto(state.current.characters, update)
-
-      // FIXME temporary fix to delete
-      if (!state.currentGame) {
-        throw Error('No loaded game')
-      }
-      const character = new Character(update.id)
-      mergeInto(state.currentGame.characters, character)
-      if (update.name !== undefined) {
-        character.name = update.name
-      }
-      if (!character.name) {
-        character.name = randomName()
-      }
-      if (update.isPlayer !== undefined) {
-        character.isPlayer = update.isPlayer
-      }
     },
-    updatePlace (state: RootState, payload: { update: PlaceUpdate; getters: any }) {
-      const { update, getters } = payload
-      if (!state.currentGame) {
+    updatePlace (state: RootState, update: RSPlace) {
+      if (!state.current) {
         throw Error('No loaded game')
       }
-      let index = update.index ?? -1
-      if (index < 0) {
-        index = state.currentGame.places.length
-        state.currentGame.places.push(new Place(index))
-      } else if (index >= state.currentGame.places.length) {
-        throw Error('No character at index: ' + index)
-      }
-      const place = state.currentGame.places[index]
-      if (update.name !== undefined) {
-        place.name = update.name
-      }
-      if (!place.name) {
-        place.name = cleanupRandomConstruct((randomize(getters.activeTagsByType.get('__place')) + ' de ' + randomName()))
-      }
+      mergeInto(state.current.places, update)
     },
-    updateSceneLog (state: RootState, update: SceneLogUpdate) {
-      if (!state.currentGame) {
+    updateGoal (state: RootState, payload: { update: RSGoal }) {
+      const { update } = payload
+      if (!state.current?.game) {
         throw Error('No loaded game')
       }
-      let index = update.index ?? -1
-      if (index < 0) {
-        index = state.currentGame.logs.length
-        const sceneIndex = state.currentGame.scenes.length - 1
-        const newItem = new SceneLog(sceneIndex, index)
-        state.currentGame.logs.push(newItem)
-        let sceneLogs = state.currentGame.sceneLogs[sceneIndex]
-        if (!sceneLogs) {
-          sceneLogs = []
-          Vue.set(state.currentGame.sceneLogs, sceneIndex, sceneLogs)
-        }
-        sceneLogs.push(newItem)
-      } else if (index >= state.currentGame.logs.length) {
-        throw Error('No scene log at index: ' + index)
-      }
-      const item = state.currentGame.logs[index]
-      if (update.icon !== undefined) {
-        item.icon = update.icon
-      }
-      if (update.avatar !== undefined) {
-        item.avatar = update.avatar
-      }
-      if (update.mechanical !== undefined) {
-        item.mechanical = update.mechanical
-      }
-      if (update.interpretation !== undefined) {
-        item.interpretation = update.interpretation
-      }
-      if (update.inspirations !== undefined) {
-        item.inspirations = update.inspirations
-      }
+      mergeInto(state.current.goals, update)
     },
-    updateGoal (state: RootState, payload: { update: GoalUpdate; getters: any }) {
-      const { update, getters } = payload
-      if (!state.currentGame) {
+    updateSceneLog (state: RootState, update: RSLog) {
+      if (!state.current) {
         throw Error('No loaded game')
       }
-      let index = update.index ?? -1
-      if (index < 0) {
-        index = state.currentGame.goals.length
-        state.currentGame.goals.push(new Goal(index))
-      } else if (index >= state.currentGame.goals.length) {
-        throw Error('No character at index: ' + index)
-      }
-      const item = state.currentGame.goals[index]
-      if (update.label !== undefined) {
-        item.label = update.label
-      }
-      if (!item.label) {
-        item.label = cleanupRandomConstruct(randomize(getters.activeTagsByType.get('__action')) + ' de ' + randomize(getters.activeTagsByType.get('__action_object')))
-      }
-      if (update.isActive !== undefined) {
-        item.isActive = update.isActive
-      }
-    },
-    updateQuestion (state: RootState, update: QuestionUpdate) {
-      if (!state.currentGame) {
-        throw Error('No loaded game')
-      }
-      let index = update.index ?? -1
-      if (index < 0) {
-        index = state.currentGame.sceneLogs.length
-        state.currentGame.goals.push(new Goal(index))
-      } else if (index >= state.currentGame.goals.length) {
-        throw Error('No character at index: ' + index)
-      }
-      const item = state.currentGame.goals[index]
-      if (update.label !== undefined) {
-        item.label = update.label
-      }
-      if (update.isActive !== undefined) {
-        item.isActive = update.isActive
-      }
+      mergeInto(state.current.logs, update)
     },
     loadTags (state: RootState) {
       state.tags = [...data.tags]
@@ -432,70 +370,70 @@ export default new Vuex.Store({
   actions: {
     async createFakeGame ({ dispatch }) {
       await dispatch('createNewGame', { name: '7e mer', tags: ['Pirates'] })
-      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Read (Thomas)' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Eilissa (Marjo)' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Ruby (Margot)' })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Read (Thomas)' })
+      await dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Eilissa (Marjo)' })
+      await dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Ruby (Margot)' })
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Batea, espion repenti de la CCA, petit ami de Liani'
       })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Liani, espion de la CCA, petite amie de Batea'
       })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Gustav Gregor Damaske, Hexe [Scélérat]' })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Gustav Gregor Damaske, Hexe [Scélérat]' })
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Kabu, chasseur, phobie de la mer, fils de l\'ancêtre Nasa (H)'
       })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Grand-Mère Nan, fille de l\'ancêtre Karaya (F)'
       })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Tit\'Nan, pêcheuse de perles, petite fille de Grand-Mère Nan'
       })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Enoon, marchand de perles' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du fort' })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Enoon, marchand de perles' })
+      await dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du fort' })
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Enrico Munafo, Capitaine du "Vol au Vent", Agent de la CCA, Chargement d\'esclaves, [Scélérat]'
       })
-      dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du port, maitre des registres' })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', { isActive: true, isPlayer: false, name: 'Capitaine du port, maitre des registres' })
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Beeron, Agent du Riroco, Prisonnier de la CCA, Dénoncé par Batea'
       })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Qidan, Tailleur de harpons, Veut libérer son père (Beeron), rancune contre la CCA'
       })
-      dispatch('updateCharacter', {
+      await dispatch('updateCharacter', {
         isActive: true,
         isPlayer: false,
         name: 'Le tavernier, à la potence pour avoir "aidé les héros à s\'enfuir'
       })
-      dispatch('updateGoal', { isActive: true, label: 'Faire péter le fort de la CCA sur l\'île' })
-      dispatch('updateGoal', { isActive: true, label: 'Faire fortune' })
-      dispatch('updateGoal', { isActive: true, label: 'Boire du rhum' })
-      dispatch('updateGoal', { isActive: true, label: 'Protéger sa/la liberté' })
-      dispatch('updatePlace', { isActive: true, name: 'Le port, les personnages y  sont recherchés' })
-      dispatch('updatePlace', {
+      await dispatch('updateGoal', { isActive: true, label: 'Faire péter le fort de la CCA sur l\'île' })
+      await dispatch('updateGoal', { isActive: true, label: 'Faire fortune' })
+      await dispatch('updateGoal', { isActive: true, label: 'Boire du rhum' })
+      await dispatch('updateGoal', { isActive: true, label: 'Protéger sa/la liberté' })
+      await dispatch('updatePlace', { isActive: true, name: 'Le port, les personnages y  sont recherchés' })
+      await dispatch('updatePlace', {
         isActive: true,
         name: 'Le fort, de la poudre et des esclaves y sont enfermés avant d\'être vendus en Jaragua'
       })
-      dispatch('updatePlace', { isActive: true, name: 'La planque de Batea et Liana' })
-      dispatch('updatePlace', { isActive: true, name: 'La planque de l\'Hexe, un cabanon  dans la jungle' })
-      dispatch('updatePlace', { isActive: true, name: 'Le volcan, Ambiance sulfureuse (on y trouve du souffre)' })
+      await dispatch('updatePlace', { isActive: true, name: 'La planque de Batea et Liana' })
+      await dispatch('updatePlace', { isActive: true, name: 'La planque de l\'Hexe, un cabanon  dans la jungle' })
+      await dispatch('updatePlace', { isActive: true, name: 'Le volcan, Ambiance sulfureuse (on y trouve du souffre)' })
       await dispatch('updateScene', {
         name: 'Grabuge à la taverne',
         context: 'Read et Eilissa discutent avec deux Rahuris à la taverne du "Vieux Faucon"',
@@ -567,12 +505,12 @@ export default new Vuex.Store({
 
       await dispatch('createNewGame', { name: 'Arrrhh !!', tags: ['Pirates'] })
       for (let i = 0; i < 3; i++) {
-        await dispatch('updateCharacter', { name: '', isPlayer: true })
+        await dispatch('updateCharacter', { name: randomName(), isActive: true, isPlayer: true })
       }
       for (let i = 0; i < 5; i++) {
-        await dispatch('updateCharacter', { name: '', isPlayer: false })
-        await dispatch('updatePlace', { name: '' })
-        await dispatch('updateGoal', { label: '' })
+        await dispatch('updateCharacter', { name: randomName(), isActive: true, isPlayer: false })
+        await dispatch('updatePlace', { name: '', isActive: true })
+        await dispatch('updateGoal', { label: '', isActive: true })
       }
       await dispatch('updateScene', {
         name: 'A la taverne du "Poney Fringant"',
@@ -583,7 +521,7 @@ export default new Vuex.Store({
         await dispatch('randomEvent')
       }
       await dispatch('updateScene', {
-        index: -1
+        name: ''
       })
       for (let i = 0; i < 5; i++) {
         await dispatch('randomEvent')
@@ -600,28 +538,41 @@ export default new Vuex.Store({
         context: 'Matt est en train de travailler dans son champ quand soudain le sol se met à trembler !'
       })
 
-      dispatch('updateGoal', { isActive: true, label: 'Survivre' })
-      dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Matt le fermier' })
+      await dispatch('updateGoal', { isActive: true, label: 'Survivre' })
+      await dispatch('updateCharacter', { isActive: true, isPlayer: true, name: 'Matt le fermier' })
 
-      dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical: 'Matt va voir rassurer les chevaux qui paniquent' })
-      dispatch('updateSceneLog', {
+      await dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical: 'Matt va voir rassurer les chevaux qui paniquent' })
+      await dispatch('updateSceneLog', {
         icon: 'fas fa-bolt',
         mechanical: 'La borduere de l\'enclot tombe dans le vide suite à une secousse plus forte que les autres'
       })
     },
     async createNewGame ({ commit /*, state */ }, game: RSGame) {
       commit('loadTags')
+      game.tagsByType = activeTagsByType(game.tags)
       commit('newGame', await rsGameModule.save(game))
     },
     async listSavedGames ({ commit }) {
-      commit('savedGames', await rsGameModule.list())
+      commit('savedGames', (await rsGameModule.list()).reverse())
     },
     async loadSavedGame ({ commit }, id) {
       commit('loadTags')
       const game = await rsGameModule.get(id)
-      const characters = await rsGameModule.characters(game).list()
-      console.log('CHARACTERS: ', characters)
-      commit('loadGame', { game, characters })
+      const characterPromise = rsGameModule.characters(game).list()
+      const placesPromise = rsGameModule.places(game).list()
+      const goalsPromise = rsGameModule.goals(game).list()
+      const scenesPromise = rsGameModule.scenes(game).list()
+      await Promise.all([characterPromise, placesPromise, goalsPromise, scenesPromise])
+      const [characters, places, goals, scenes] = [
+        await characterPromise,
+        await placesPromise,
+        await goalsPromise,
+        await scenesPromise
+      ]
+      const sceneIndex = scenes.length - 1
+      const scene = sceneIndex >= 0 ? scenes[sceneIndex] : undefined
+      const logs = scene ? await rsGameModule.logs(scene).list() : []
+      commit('loadGame', { game, characters, places, goals, scenes, sceneIndex, logs })
     },
     async deleteGame ({ commit }, id) {
       await rsGameModule.remove(id)
@@ -630,27 +581,82 @@ export default new Vuex.Store({
     closeCurrentGame ({ commit }) {
       commit('closeGame')
     },
-    updateScene ({ commit }, payload: SceneUpdate) {
+    async updateScene ({ commit, state, dispatch }, payload: RSScene) {
+      if (!state.current) throw Error('No loaded game')
+      const isNew = !payload.id
+      await rsGameModule.scenes(state.current.game).save(payload)
       commit('updateScene', payload)
+      if (isNew) {
+        const index = state.current.scenes.findIndex(s => s.id === payload.id)
+        await dispatch('loadScene', index)
+      }
+    },
+    async loadScene ({ commit, state }, index: number) {
+      if (!state.current) throw Error('No loaded game')
+      commit('loadScene', { index, logs: [] })
+      const logs = await rsGameModule.logs(state.current.scenes[index]).list()
+      commit('loadScene', { index, logs })
     },
     async updateCharacter ({ commit, state }, payload: RSCharacter) {
       if (!state.current) throw Error('No loaded game')
+      if (!payload.name) {
+        payload.name = randomName()
+      }
       await rsGameModule.characters(state.current.game).save(payload)
       commit('updateCharacter', payload)
     },
-    updatePlace ({ commit, getters }, payload: PlaceUpdate) {
-      commit('updatePlace', { update: payload, getters })
+    async updatePlace ({ commit, state }, payload: RSPlace) {
+      if (!state.current) throw Error('No loaded game')
+      if (!payload.name) {
+        payload.name = cleanupRandomConstruct((randomize(state.current.game.tagsByType.__place) + ' de ' + randomName()))
+      }
+      await rsGameModule.places(state.current.game).save(payload)
+      commit('updatePlace', payload)
     },
-    updateSceneLog ({ commit }, payload: SceneLogUpdate) {
+    async updateSceneLog ({ commit, state }, payload: RSLog) {
+      if (!state.current) throw Error('No loaded game')
+      const scene = state.current.scenes[state.current.sceneIndex]
+      await rsGameModule.logs(scene).save(payload)
       commit('updateSceneLog', payload)
     },
-    updateGoal ({ commit, getters }, payload: GoalUpdate) {
-      commit('updateGoal', { update: payload, getters })
+    async updateGoal ({ commit, state }, payload: RSGoal) {
+      if (!state.current) throw Error('No loaded game')
+      await rsGameModule.goals(state.current.game).save(payload)
+      commit('updateGoal', { update: payload })
     },
-    updateQuestion ({ commit }, payload: GoalUpdate) {
-      commit('updateQuestion', payload)
+    getCharacterById ({ state }, id: string): RSCharacter {
+      if (!state.current) throw Error('No loaded game')
+      const res = state.current.characters.find(p => p.id === id)
+      if (!res) throw new Error(`Can't find character: '${id}'`)
+      return res
     },
-    randomAnswer ({ dispatch }, payload: string) {
+    getGoalById ({ state }, id: string): RSGoal {
+      if (!state.current) throw Error('No loaded game')
+      const res = state.current.goals.find(p => p.id === id)
+      if (!res) throw new Error(`Can't find goal: '${id}'`)
+      return res
+    },
+    getPlaceById ({ state }, id: string): RSPlace {
+      if (!state.current) throw Error('No loaded game')
+      const res = state.current.places.find(p => p.id === id)
+      if (!res) throw new Error(`Can't find place: '${id}'`)
+      return res
+    },
+    getSceneById ({ state }, id: string): RSScene {
+      if (!state.current) throw Error('No loaded game')
+      const res = state.current.scenes.find(p => p.id === id)
+      if (!res) throw new Error(`Can't find scene: '${id}'`)
+      return res
+    },
+    getLogById ({ state }, id: string): RSLog {
+      if (!state.current) throw Error('No loaded game')
+      const res = state.current.logs.find(p => p.id === id)
+      if (!res) throw new Error(`Can't find log: '${id}'`)
+      return res
+    },
+    async randomAnswer ({ dispatch, state }, payload: string) {
+      if (!state.current) throw Error('No loaded game')
+      if (!(state.current.sceneIndex === state.current.scenes.length - 1)) throw Error('Not on last scene')
       let answer = ''
       const number = Math.random()
       if (number < 0.1) {
@@ -666,12 +672,14 @@ export default new Vuex.Store({
       } else {
         answer = 'non, et en plus...'
       }
-      dispatch('updateSceneLog', { icon: 'far fa-question-circle', mechanical: payload + ' ' + answer })
+      await dispatch('updateSceneLog', { icon: 'far fa-question-circle', mechanical: payload + ' ' + answer })
       if (Math.random() < 0.1) {
-        dispatch('randomEvent')
+        await dispatch('randomEvent')
       }
     },
-    async randomEvent ({ dispatch, getters }) {
+    async randomEvent ({ dispatch, getters, state }) {
+      if (!state.current) throw Error('No loaded game')
+      if (!(state.current.sceneIndex === state.current.scenes.length - 1)) throw Error('Not on last scene')
       let mechanical = ''
       while (true) {
         const d100 = Math.floor(Math.random() * 100) + 1
@@ -681,12 +689,12 @@ export default new Vuex.Store({
           if (getters.activeNonPlayerCharacters.length === 0) {
             continue
           }
-          const item: Character = randomize(getters.activeNonPlayerCharacters)
+          const item: RSCharacter = randomize(getters.activeNonPlayerCharacters)
           mechanical = 'Action du PNJ "' + item.name + '"'
         } else if (d100 <= 35) {
-          await dispatch('updateCharacter', { name: randomName(), isPlayer: false })
+          await dispatch('updateCharacter', { name: randomName(), isActive: true, isPlayer: false })
           const lastOne = getters.activeNonPlayerCharacters.length - 1
-          const item: Character = getters.activeNonPlayerCharacters[lastOne]
+          const item: RSCharacter = getters.activeNonPlayerCharacters[lastOne]
           mechanical = 'Nouveau PNJ "' + item.name + '"'
         } else if (d100 <= 45) {
           if (getters.activeNonPlayerCharacters.length === 0) {
@@ -695,31 +703,31 @@ export default new Vuex.Store({
           if (getters.activeGoals.length === 0) {
             continue
           }
-          const item: Goal = randomize(getters.activeGoals)
+          const item: RSGoal = randomize(getters.activeGoals)
           mechanical = 'Rapprochement d\'objectif: "' + item.label + '"'
         } else if (d100 <= 52) {
           if (getters.activeGoals.length === 0) {
             continue
           }
-          const item: Goal = randomize(getters.activeGoals)
+          const item: RSGoal = randomize(getters.activeGoals)
           mechanical = 'Eloignement d\'objectif: "' + item.label + '"'
         } else if (d100 <= 55) {
           if (getters.activeGoals.length === 0) {
             continue
           }
-          const item: Goal = randomize(getters.activeGoals)
+          const item: RSGoal = randomize(getters.activeGoals)
           mechanical = 'Objectif terminé: "' + item.label + '"'
         } else if (d100 <= 67) {
           if (getters.activePlayerCharacters.length === 0) {
             continue
           }
-          const item: Character = randomize(getters.activePlayerCharacters)
+          const item: RSCharacter = randomize(getters.activePlayerCharacters)
           mechanical = 'Événement négatif pour le PJ "' + item.name + '"'
         } else if (d100 <= 75) {
           if (getters.activePlayerCharacters.length === 0) {
             continue
           }
-          const item: Character = randomize(getters.activePlayerCharacters)
+          const item: RSCharacter = randomize(getters.activePlayerCharacters)
           mechanical = 'Événement positif pour le PJ "' + item.name + '"'
         } else if (d100 <= 83) {
           mechanical = 'Événement ambigu'
@@ -727,31 +735,27 @@ export default new Vuex.Store({
           if (getters.activeNonPlayerCharacters.length === 0) {
             continue
           }
-          const item: Character = randomize(getters.activeNonPlayerCharacters)
+          const item: RSCharacter = randomize(getters.activeNonPlayerCharacters)
           mechanical = 'Événement négatif pour le PNJ "' + item.name + '"'
         } else {
           if (getters.activeNonPlayerCharacters.length === 0) {
             continue
           }
-          const item: Character = randomize(getters.activeNonPlayerCharacters)
+          const item: RSCharacter = randomize(getters.activeNonPlayerCharacters)
           mechanical = 'Événement positif pour un PNJ "' + item.name + '"'
         }
         break
       }
       const inspirations = [
-        randomize(getters.activeTagsByType.get('__action')),
-        randomize(getters.activeTagsByType.get('__action_object'))
+        randomize(state.current.game.tagsByType.__action),
+        randomize(state.current.game.tagsByType.__action_object)
       ]
-      dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical, inspirations })
+      await dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical, inspirations })
     },
-    addComment ({ dispatch }, comment: string) {
-      dispatch('updateSceneLog', { icon: 'far fa-comments', interpretation: comment })
-    },
-    addGoal ({ dispatch }, goal: string) {
-      dispatch('updateGoal', { label: goal, isActive: true })
-    },
-    addQuestion ({ dispatch }, question: string) {
-      dispatch('updateSceneLog', { icon: 'far fa-question-circle', mechanical: question })
+    async addComment ({ dispatch, state }, comment: string) {
+      if (!state.current) throw Error('No loaded game')
+      if (!(state.current.sceneIndex === state.current.scenes.length - 1)) throw Error('Not on last scene')
+      await dispatch('updateSceneLog', { icon: 'far fa-comments', interpretation: comment })
     },
     loadTags ({ commit }) {
       commit('loadTags')

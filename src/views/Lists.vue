@@ -5,8 +5,8 @@
       <v-divider></v-divider>
       <v-card-text>
         <ul v-if="activePlayerCharacters.length + activeNonPlayerCharacters.length">
-          <li v-for="(character) in activePlayerCharacters" :key="character.id"><b>{{character.name}} (joueur)</b> <edit-character :index="character.id" /></li>
-          <li v-for="(character) in activeNonPlayerCharacters" :key="character.id">{{character.name}} <edit-character :index="character.id" /></li>
+          <li v-for="(character) in activePlayerCharacters" :key="character.id"><b>{{character.name}} (joueur)</b> <edit-character :id="character.id" /></li>
+          <li v-for="(character) in activeNonPlayerCharacters" :key="character.id">{{character.name}} <edit-character :id="character.id" /></li>
         </ul>
         <span v-else>Aucun</span>
       </v-card-text>
@@ -17,7 +17,7 @@
       <v-divider></v-divider>
       <v-card-text>
         <ul v-if="activeGoals.length">
-          <li v-for="(goal) in activeGoals" :key="goal.id">{{goal.label}} <edit-goal :index="goal.index " /></li>
+          <li v-for="(goal) in activeGoals" :key="goal.id">{{goal.label}} <edit-goal :id="goal.id " /></li>
         </ul>
         <span v-else>Aucun</span>
       </v-card-text>
@@ -30,7 +30,7 @@
         <ul v-if="activePlaces.length">
           <li v-for="(place) in activePlaces" :key="place.id">
             {{ place.name }}
-            <edit-place :index="place.id " />
+            <edit-place :id="place.id " />
           </li>
         </ul>
         <span v-else>Aucun</span>

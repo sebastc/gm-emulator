@@ -1,6 +1,6 @@
 <template>
-  <div v-if="this.currentGame">
-    <div class="display-1 d-inline-block"><span class="font-weight-bold">{{ currentGame.name }}</span> <small class="text--secondary font-weight-light">({{ currentGame.tags.join(" / ")}})</small> </div>
+  <div v-if="current.game">
+    <div class="display-1 d-inline-block"><span class="font-weight-bold">{{ current.game.name }}</span> <small class="text--secondary font-weight-light">({{ current.game.tags.join(" / ")}})</small> </div>
     <div class="display-1 d-inline-block"></div>
 
     <v-alert type="info" text outlined dense border="left" color="primary" class="mb-2" v-if="tutorialStep < 6">
@@ -20,15 +20,12 @@
     </v-alert>
 
     <v-expansion-panels accordion popout v-model="selectedSceneIndex">
-      <v-expansion-panel
-        v-for="(item,i) in currentGame.scenes"
-        :key="i"
-      >
+      <v-expansion-panel v-for="item in current.scenes" :key="item.id">
         <v-expansion-panel-header>
           <div>
           <b>{{item.name || 'Scène sans nom'}}</b>
             <span v-if="item.summary"> : {{item.summary}}</span>
-          <edit-scene :index="i"/>
+          <edit-scene :id="item.id"/>
           </div>
         </v-expansion-panel-header>
         <v-expansion-panel-content>
@@ -47,11 +44,11 @@
                 </v-avatar>
               </template>
               <v-card class="elevation-3" v-if="sceneLog.interpretation">
-                <v-card-text>{{sceneLog.interpretation}} <edit-log :index="sceneLog.index" /></v-card-text>
+                <v-card-text>{{sceneLog.interpretation}} <edit-log :id="sceneLog.id" /></v-card-text>
               </v-card>
               <span class="body-2 font-italic font-weight-light text--secondary" v-else>{{sceneLog.mechanical}}
                 <tag  v-for="(inspiration, i) in sceneLog.inspirations" :key="i" :label="inspiration" />
-                <edit-log :index="sceneLog.index" />
+                <edit-log :id="sceneLog.id" />
               </span>
             </v-timeline-item>
           </v-timeline>
@@ -70,8 +67,8 @@
       <v-divider vertical class="mr-2" />
 
       <add-event />
-      <add-question :disabled="!currentGame.scenes.length"/>
-      <add-comment :disabled="!currentGame.scenes.length"/>
+      <add-question :disabled="!current.scenes.length"/>
+      <add-comment :disabled="!current.scenes.length"/>
 
       <v-divider vertical class="mr-2" />
 
@@ -115,7 +112,7 @@ export default {
   components: { AddEvent, AddComment, AddQuestion, Tag, EditCharacter, EditScene, EditLog, EditGoal, EditPlace },
   beforeRouteUpdate (to, from, next) {
     console.log('to:' + to, 'from:' + from)
-    if (!this.currentGame) {
+    if (!this.current?.game) {
       next('/load')
     } else {
       next()
@@ -128,37 +125,30 @@ export default {
   },
   computed: {
     ...mapState([
-      'currentGame'
+      'current'
     ]),
     ...mapGetters([
       'activePlayerCharacters', 'activeNonPlayerCharacters', 'activeGoals'
     ]),
     currentSceneIndex () {
-      return this.currentGame.scenes.length - 1
+      return (this.current?.scenes?.length ?? 0) - 1
     },
     currentLogs () {
-      let res = []
-      if (this.selectedSceneIndex >= 0) {
-        res = this.currentGame.sceneLogs[this.selectedSceneIndex] || []
-      } else if (this.selectedSceneIndex && this.selectedSceneIndex.length) {
-        res = this.currentGame.sceneLogs[this.selectedSceneIndex[0]] || []
-      }
-      console.log('currentLogs: ', res)
-      return res
+      return this.current?.logs ?? []
     },
     oldScenes () {
-      return this.currentGame.scenes.slice(0, this.currentSceneIndex)
+      return this.current.scenes.slice(0, this.current.sceneIndex)
     },
     currentScene () {
-      return this.currentGame.scenes.slice(this.currentSceneIndex)
+      return this.current.scenes.slice(this.currentSceneIndex)
     },
     tutorialStep () {
       let res
-      if (this.currentGame.scenes.length > 1) {
+      if (this.current.scenes.length > 1) {
         res = 6
-      } else if (this.currentGame.sceneLogs.length) {
+      } else if (this.current.logs.length) {
         res = 5
-      } else if (this.currentGame.scenes.length) {
+      } else if (this.current.scenes.length) {
         res = 4
       } else if (this.activeGoals.length) {
         res = 3
@@ -172,26 +162,24 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['closeCurrentGame', 'updatePlace']),
+    ...mapActions(['closeCurrentGame', 'updatePlace', 'loadScene']),
     goToTheEnd () {
       setTimeout(() => document.body.scrollIntoView(false), 20)
-    },
-    addPlace () {
-      this.updatePlace({
-        index: -1,
-        name: '',
-        isActive: this.isActive
-      })
     }
   },
   watch: {
     currentScene () {
       this.selectedSceneIndex = this.currentSceneIndex
       this.goToTheEnd()
+    },
+    async selectedSceneIndex () {
+      if (this.selectedSceneIndex >= 0) {
+        await this.loadScene(this.selectedSceneIndex)
+      }
     }
   },
   mounted () {
-    this.panels = [this.currentGame.scenes.length - 1]
+    this.panels = [this.current.scenes.length - 1]
     if (this.currentSceneIndex >= 0) {
       this.selectedSceneIndex = this.currentSceneIndex
     }

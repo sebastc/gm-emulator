@@ -19,8 +19,8 @@ const routes: Array<RouteConfig> = [
       title: 'GMEmulator - Jeu'
     },
     beforeEnter (to, from, next) {
-      console.log('currentGame: ' + store.state.currentGame)
-      if (store.state.currentGame) {
+      console.log('current.game: ', store.state.current?.game)
+      if (store.state.current?.game) {
         next()
       } else {
         next('/load')

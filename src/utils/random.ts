@@ -8,3 +8,7 @@ export function randomize<T> (elements: T[]): T {
   }
   return res
 }
+
+export function cleanupRandomConstruct (s: string) {
+  return s.replace(/\b([dl])[ea] ([AEIUOY])/gim, '$1\'$2')
+}
