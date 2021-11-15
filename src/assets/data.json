@@ -306,7 +306,6 @@
     {"value": "Guider", "tags": [ "__theme", "__action" ] },
     {"value": "Transformer", "tags": [ "__theme", "__action" ] },
     {"value": "Renverser", "tags": [ "__theme", "__action" ] },
-    {"value": "Oppresser", "tags": [ "__theme", "__action" ] },
     {"value": "Changer", "tags": [ "__theme", "__action" ] },
 
     {"value": "Objectifs/Buts", "tags": [ "__theme", "__action_object" ] },
@@ -390,7 +389,6 @@
     {"value": "Véhicule", "tags": [ "__theme", "__action_object" ] },
     {"value": "Art", "tags": [ "__theme", "__action_object" ] },
     {"value": "Victoire", "tags": [ "__theme", "__action_object" ] },
-    {"value": "Dispute", "tags": [ "__theme", "__action_object" ] },
     {"value": "Richesses", "tags": [ "__theme", "__action_object" ] },
     {"value": "status quo", "tags": [ "__theme", "__action_object" ] },
     {"value": "Technologie", "tags": [ "__theme", "__action_object" ] },

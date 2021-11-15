@@ -1,13 +1,13 @@
 <template>
   <div>
     <h1>Tags</h1>
-    <v-card v-for="k in externalTags" :key="k" class="ma-1">
-      <v-card-title>{{k}}</v-card-title>
+    <v-card v-for="theme in themeTags" :key="theme" class="ma-1">
+      <v-card-title>{{ themeLabel(theme) }}</v-card-title>
       <v-card-text>
-        <div v-for="(v2, k2) in tagsBySection[k]" :key="k2">
-          <h3>{{typeLabel(k2)}}</h3>
-          <v-hover v-slot:default="{ hover }" v-for="v3 in v2" :key="v3">
-            <v-chip small class="mr-1 mb-1" :close="hover">{{v3}}</v-chip>
+        <div v-for="(tags, type) in tagsByTheme[theme]" :key="theme + type">
+          <h3>{{ typeLabel(type) }}</h3>
+          <v-hover v-slot:default="{ hover }" v-for="tag in tags" :key="theme + type + tag">
+            <v-chip small class="mr-1 mb-1" :close="hover">{{ tag }}</v-chip>
           </v-hover>
         </div>
       </v-card-text>
@@ -18,36 +18,43 @@
 <script>
 import { mapState, mapActions } from 'vuex'
 
+function isThemeTag (tag) {
+  return !tag.startsWith('__') || tag === '__theme'
+}
+
+function isTypeTag (tag) {
+  return !isThemeTag(tag)
+}
+
 export default {
   name: 'Tags',
   computed: {
     ...mapState(['tags', 'tagValues']),
     allTags () {
       const newVar = [...new Set(this.tagValues.flatMap(e => e.tags))]
-      console.log('allTags', newVar)
       return newVar
     },
-    internalTags () {
-      return [...this.allTags.filter(t => t.startsWith('__'))]
+    themeTags () {
+      return [...this.allTags.filter(t => isThemeTag(t))]
     },
-    externalTags () {
-      return [...this.allTags.filter(t => !t.startsWith('__'))]
+    typeTags () {
+      return [...this.allTags.filter(t => isTypeTag(t))]
     },
-    tagsBySection () {
+    tagsByTheme () {
       const res = {}
       this.tagValues.forEach(t => {
-        const iTags = t.tags.filter(t => !t.startsWith('__'))
-        if (iTags.length !== 1) {
+        const themeTags = t.tags.filter(t => isThemeTag(t))
+        if (themeTags.length !== 1) {
           console.log('unexpected number of external tags for ', t)
           return
         }
-        const iTag = iTags[0]
-        const eTags = t.tags.filter(t => t.startsWith('__'))
-        const subMap = res[iTag] || {}
-        res[iTag] = subMap
-        eTags.forEach(et => {
-          const list = subMap[et] || []
-          subMap[et] = list
+        const themeTag = themeTags[0]
+        const typeTags = t.tags.filter(t => isTypeTag(t))
+        const subMap = res[themeTag] || {}
+        res[themeTag] = subMap
+        typeTags.forEach(typeTag => {
+          const list = subMap[typeTag] || []
+          subMap[typeTag] = list
           list.push(t.value)
         })
       })
@@ -64,7 +71,15 @@ export default {
         __action: 'Action',
         __ambiance: 'Ambiance',
         __event: 'Evénement',
-        __theme: 'Thème'
+        __theme: 'Thème',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __action_object: 'Objet d\'action'
+      }
+      return mapping[type] || type
+    },
+    themeLabel (type) {
+      const mapping = {
+        __theme: 'Défaut'
       }
       return mapping[type] || type
     }

@@ -4,17 +4,7 @@ import Vuex from 'vuex'
 import data from '@/assets/data.json'
 import { randomName } from '@/utils/names.ts'
 import { cleanupRandomConstruct, randomize } from '@/utils/random.ts'
-import {
-  Repository,
-  RootState,
-  Entity,
-  RSGame,
-  RSCharacter,
-  RSPlace,
-  RSGoal,
-  RSScene,
-  RSLog
-} from './types'
+import { Entity, Repository, RootState, RSCharacter, RSGame, RSGoal, RSLog, RSPlace, RSScene } from './types'
 
 import RemoteStorage from 'remotestoragejs'
 import Widget from 'remotestorage-widget'
@@ -38,7 +28,7 @@ export interface RSEvent {
   // Path of the changed node, relative to this baseclient's scope root
   relativePath: string;
   // See origin descriptions below
-  origin: 'window|local|remote|conflict';
+  origin: 'window'|'local'|'remote'|'conflict';
   // Old body of the changed node (local version in conflicts; undefined if creation)
   oldValue: any;
   // New body of the changed node (remote version in conflicts; undefined if deletion)
@@ -63,6 +53,7 @@ export interface GameModule {
   goals(game: RSGame): Repository<RSGoal>;
   scenes(game: RSGame): Repository<RSScene>;
   logs(game: RSScene): Repository<RSLog>;
+  onChange (handler: (event: RSEvent) => void): void;
 }
 
 const RSGameModule = {
@@ -142,11 +133,6 @@ const RSGameModule = {
       required: ['id', 'icon']
     })
 
-    privateClient.on('change', e => {
-      const event = e as RSEvent
-      console.log('EVENT: ', event)
-    })
-
     const exports: GameModule = Object.assign(
       new Repository<RSGame>(privateClient, 'game', '', true),
       {
@@ -154,7 +140,10 @@ const RSGameModule = {
         places (game: RSGame) { return new Repository<RSPlace>(privateClient, 'place', game.id) },
         goals (game: RSGame) { return new Repository<RSGoal>(privateClient, 'goal', game.id) },
         scenes (game: RSGame) { return new Repository<RSScene>(privateClient, 'scene', game.id, true) },
-        logs (scene: RSScene) { return new Repository<RSLog>(privateClient, 'log', scene.id) }
+        logs (scene: RSScene) { return new Repository<RSLog>(privateClient, 'log', scene.id) },
+        onChange (handler: (event: RSEvent) => void) {
+          privateClient.on('change', e => handler(e as RSEvent))
+        }
       }
     )
 
@@ -164,13 +153,18 @@ const RSGameModule = {
 
 const remoteStorage = new RemoteStorage({
   logging: false,
+  changeEvents: {
+    window: true,
+    remote: true,
+    local: true,
+    conflict: true
+  },
   modules: [RSGameModule]
 })
 
 const rsGameModule = ((remoteStorage as any).gm_emulator as GameModule)
 
 remoteStorage.access.claim('gm_emulator', 'rw')
-remoteStorage.caching.enable('/gm_emulator/')
 
 const widget = new Widget(remoteStorage, { logging: true })
 
@@ -192,13 +186,16 @@ remoteStorage.on('network-online', () => {
   console.debug('Hooray, we\'re back online.')
 })
 
-function mergeInto<T extends Entity> (list: T[], elt: T) {
+function mergeInto<T extends Entity> (list: T[], elt: T, reverse = false) {
   if (!elt.id) {
     throw Error('Element has no id')
   }
   const idx = list.findIndex(e => e.id === elt.id)
   if (idx < 0) {
-    const insertIdx = list.length
+    const nextIdx = reverse ? list.findIndex(e => (e.createdDate ?? 0) < (elt.createdDate ?? 0))
+      : list.findIndex(e => (e.createdDate ?? 0) > (elt.createdDate ?? 0))
+    const defaultIdx = reverse ? 0 : list.length
+    const insertIdx = nextIdx < 0 ? defaultIdx : nextIdx
     list.splice(insertIdx, 0, elt)
     return { isNew: true, index: insertIdx }
   } else {
@@ -262,7 +259,7 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
   return newObject
 }
 
-export default new Vuex.Store({
+const store = new Vuex.Store({
   state: new RootState(),
   getters: {
     activePlayerCharacters (state: RootState): RSCharacter[] {
@@ -280,7 +277,7 @@ export default new Vuex.Store({
   },
   mutations: {
     newGame (state: RootState, game: RSGame) {
-      mergeInto(state.games, game)
+      mergeInto(state.games, game, true)
       state.current = {
         game,
         characters: [],
@@ -349,8 +346,7 @@ export default new Vuex.Store({
       }
       mergeInto(state.current.places, update)
     },
-    updateGoal (state: RootState, payload: { update: RSGoal }) {
-      const { update } = payload
+    updateGoal (state: RootState, update: RSGoal) {
       if (!state.current?.game) {
         throw Error('No loaded game')
       }
@@ -585,7 +581,6 @@ export default new Vuex.Store({
       if (!state.current) throw Error('No loaded game')
       const isNew = !payload.id
       await rsGameModule.scenes(state.current.game).save(payload)
-      commit('updateScene', payload)
       if (isNew) {
         const index = state.current.scenes.findIndex(s => s.id === payload.id)
         await dispatch('loadScene', index)
@@ -599,30 +594,20 @@ export default new Vuex.Store({
     },
     async updateCharacter ({ commit, state }, payload: RSCharacter) {
       if (!state.current) throw Error('No loaded game')
-      if (!payload.name) {
-        payload.name = randomName()
-      }
       await rsGameModule.characters(state.current.game).save(payload)
-      commit('updateCharacter', payload)
     },
     async updatePlace ({ commit, state }, payload: RSPlace) {
       if (!state.current) throw Error('No loaded game')
-      if (!payload.name) {
-        payload.name = cleanupRandomConstruct((randomize(state.current.game.tagsByType.__place) + ' de ' + randomName()))
-      }
       await rsGameModule.places(state.current.game).save(payload)
-      commit('updatePlace', payload)
     },
     async updateSceneLog ({ commit, state }, payload: RSLog) {
       if (!state.current) throw Error('No loaded game')
       const scene = state.current.scenes[state.current.sceneIndex]
       await rsGameModule.logs(scene).save(payload)
-      commit('updateSceneLog', payload)
     },
     async updateGoal ({ commit, state }, payload: RSGoal) {
       if (!state.current) throw Error('No loaded game')
       await rsGameModule.goals(state.current.game).save(payload)
-      commit('updateGoal', { update: payload })
     },
     getCharacterById ({ state }, id: string): RSCharacter {
       if (!state.current) throw Error('No loaded game')
@@ -762,7 +747,62 @@ export default new Vuex.Store({
     },
     showRemoteStorageWidget ({ commit }) {
       widget.attach('remotestorage-widget')
+    },
+    async init ({ state, dispatch, commit }) {
+      await dispatch('listSavedGames')
+      rsGameModule.onChange(e => {
+        console.debug('CHANGE: ' + e.relativePath, e)
+        const elts = e.relativePath.split('/')
+        const newValue = e.origin === 'conflict' && e?.oldValue?.createdDate > e?.newValue?.createdDate ? e.oldValue : e.newValue
+
+        if (elts.length === 3) {
+          // games/<id>/content
+          console.debug('Reloading games')
+          dispatch('listSavedGames')
+        } else if (e.newValue) {
+          // games/<id>/...
+          const gameId = elts.slice(0, 2).join('/')
+          if (state?.current?.game?.id === gameId) {
+            if (elts.length === 4) {
+              // games/<id>/<type>/<id>
+              switch (elts[2]) {
+                case 'characters':
+                  return commit('updateCharacter', newValue)
+                case 'places':
+                  return commit('updatePlace', newValue)
+                case 'goals':
+                  return commit('updateGoal', newValue)
+                default:
+              }
+            } else if (elts.length >= 5) {
+              // games/<id>/scenes/<id>/content
+              // games/<id>/scenes/<id>/logs/<id>
+              const changedSceneId = elts.slice(0, 4).join('/')
+              const currentScenes = state?.current?.scenes
+              const currentSceneIndex = state?.current?.sceneIndex ?? -1
+              const currentSceneId = currentScenes?.[currentSceneIndex]?.id
+              switch (elts[4]) {
+                case 'content':
+                  return commit('updateScene', newValue)
+                case 'logs':
+                  if (currentSceneId === changedSceneId) {
+                    return commit('updateSceneLog', newValue)
+                  }
+                  break
+                default:
+              }
+            } else {
+              console.error('Unsupported id: ', elts)
+            }
+          }
+        }
+      })
+      remoteStorage.caching.enable('/gm_emulator/')
     }
   },
   modules: {}
 })
+
+export default store
+
+remoteStorage.on('ready', () => store.dispatch('init'))

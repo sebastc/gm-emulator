@@ -189,11 +189,13 @@ export class Repository<T extends Entity> {
       .filter(item => response[item] && item !== 'content')
       .map(item => item.replace(/\/$/, ''))
     return Promise.all(ids.map(id => this.get(this.basePath + id)))
-      .then(l => l.sort((a, b) => {
-        const vb = b.createdDate ?? 0
-        const va = a.createdDate ?? 0
-        return vb < va ? 1 : va < vb ? -1 : 0
-      }))
+      .then(l => l.filter(x => typeof x !== 'undefined')
+        .sort((a, b) => {
+          const vb = b.createdDate ?? 0
+          const va = a.createdDate ?? 0
+          return vb < va ? 1 : va < vb ? -1 : 0
+        })
+      )
   };
 
   async get (id: string): Promise<T> {
@@ -213,7 +215,7 @@ export class Repository<T extends Entity> {
           delete entity[k]
         }
       })
-      console.log('SAVING ' + this.type, entity)
+      console.debug('SAVING ' + this.type, entity)
       await this.privateClient.storeObject(this.type, path, entity)
     } catch (e) {
       throw new Error(`Failed to store '${this.type}' entity: ${e}\n${JSON.stringify(entity)}`)
