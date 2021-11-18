@@ -7,7 +7,7 @@ type PlaceRef = number;
 export class Aspect {
   name = 'aspect';
   scopes: Scope[] | null = null;
-  tags: string[] = [];
+  // tags: string[] = [];
 }
 
 export class Goal {
@@ -269,11 +269,13 @@ export interface RSCharacter extends Entity {
   name: string;
   isPlayer: boolean;
   isActive: boolean;
+  aspects?: string[];
 }
 
 export interface RSPlace extends Entity {
   name: string;
   isActive: boolean;
+  aspects: string[];
   // aspects: Aspect[];
   // people: CharacterRef[];
 }
@@ -288,6 +290,7 @@ export interface RSScene extends Entity {
   isActive: boolean;
   context: string;
   summary: string;
+  aspects: string[];
   isChanged: boolean;
   isInterrupted: boolean;
   alteredContext?: string;

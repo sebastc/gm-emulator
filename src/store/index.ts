@@ -84,7 +84,8 @@ const RSGameModule = {
         id: { type: 'string' },
         name: { type: 'string' },
         isPlayer: { type: 'boolean' },
-        isActive: { type: 'boolean' }
+        isActive: { type: 'boolean' },
+        aspects: { type: 'array', items: 'string' }
       },
       required: ['id', 'name', 'isPlayer', 'isActive']
     })
@@ -93,7 +94,8 @@ const RSGameModule = {
       properties: {
         id: { type: 'string' },
         name: { type: 'string' },
-        isActive: { type: 'boolean' }
+        isActive: { type: 'boolean' },
+        aspects: { type: 'array', items: 'string' }
       },
       required: ['id', 'name', 'isActive']
     })
@@ -114,6 +116,7 @@ const RSGameModule = {
         isActive: { type: 'boolean' },
         context: { type: 'string' },
         summary: { type: 'string' },
+        aspects: { type: 'array', items: 'string' },
         isChanged: { type: 'boolean' },
         isInterrupted: { type: 'boolean' },
         alteredContext: { type: 'string' }
@@ -666,6 +669,7 @@ const store = new Vuex.Store({
       if (!state.current) throw Error('No loaded game')
       if (!(state.current.sceneIndex === state.current.scenes.length - 1)) throw Error('Not on last scene')
       let mechanical = ''
+      let relatedAspects: string[] | undefined
       while (true) {
         const d100 = Math.floor(Math.random() * 100) + 1
         if (d100 <= 7) {
@@ -676,11 +680,13 @@ const store = new Vuex.Store({
           }
           const item: RSCharacter = randomize(getters.activeNonPlayerCharacters)
           mechanical = 'Action du PNJ "' + item.name + '"'
+          relatedAspects = item.aspects
         } else if (d100 <= 35) {
           await dispatch('updateCharacter', { name: randomName(), isActive: true, isPlayer: false })
           const lastOne = getters.activeNonPlayerCharacters.length - 1
           const item: RSCharacter = getters.activeNonPlayerCharacters[lastOne]
           mechanical = 'Nouveau PNJ "' + item.name + '"'
+          relatedAspects = item.aspects
         } else if (d100 <= 45) {
           if (getters.activeNonPlayerCharacters.length === 0) {
             continue
@@ -708,12 +714,14 @@ const store = new Vuex.Store({
           }
           const item: RSCharacter = randomize(getters.activePlayerCharacters)
           mechanical = 'Événement négatif pour le PJ "' + item.name + '"'
+          relatedAspects = item.aspects
         } else if (d100 <= 75) {
           if (getters.activePlayerCharacters.length === 0) {
             continue
           }
           const item: RSCharacter = randomize(getters.activePlayerCharacters)
           mechanical = 'Événement positif pour le PJ "' + item.name + '"'
+          relatedAspects = item.aspects
         } else if (d100 <= 83) {
           mechanical = 'Événement ambigu'
         } else if (d100 <= 92) {
@@ -722,16 +730,18 @@ const store = new Vuex.Store({
           }
           const item: RSCharacter = randomize(getters.activeNonPlayerCharacters)
           mechanical = 'Événement négatif pour le PNJ "' + item.name + '"'
+          relatedAspects = item.aspects
         } else {
           if (getters.activeNonPlayerCharacters.length === 0) {
             continue
           }
           const item: RSCharacter = randomize(getters.activeNonPlayerCharacters)
           mechanical = 'Événement positif pour un PNJ "' + item.name + '"'
+          relatedAspects = item.aspects
         }
         break
       }
-      const inspirations = [
+      const inspirations = relatedAspects?.length && Math.random() < 0.5 ? [randomize(relatedAspects)] : [
         randomize(state.current.game.tagsByType.__action),
         randomize(state.current.game.tagsByType.__action_object)
       ]

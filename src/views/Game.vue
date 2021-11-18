@@ -30,7 +30,12 @@
         </v-expansion-panel-header>
         <v-expansion-panel-content>
           <v-card v-if="item.context">
-            <v-card-text> {{item.context}}</v-card-text>
+            <v-card-text>
+              <div> {{ item.context }}</div>
+              <div>
+                <v-chip v-for="aspect in item.aspects" :key="aspect" small>{{ aspect }}</v-chip>
+              </div>
+            </v-card-text>
           </v-card>
           <v-timeline dense>
             <v-timeline-item small fill-dot v-for="(sceneLog, i) in currentLogs" :key="i" :icon="sceneLog.icon || 'fas fa-bolt'"> <!-- hide-dot -->

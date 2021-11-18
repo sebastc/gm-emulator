@@ -4,6 +4,8 @@
       <v-text-field label="Nom" v-model="name" hint="Nom du lieux"
                     append-icon="fas fa-dice"
                     @click:append="newRandomPlace" />
+      Aspects:
+      <string-list v-model="aspects" />
     </template>
   </edit-dialog>
 </template>
@@ -13,17 +15,19 @@ import { randomName } from '@/utils/names'
 import EditDialog from '@/components/EditDialog'
 import { mapActions, mapState } from 'vuex'
 import { randomize } from '@/utils/random'
+import StringList from '@/components/StringList'
 
 export default {
   name: 'EditPlace',
-  components: { EditDialog },
+  components: { StringList, EditDialog },
   props: {
     id: String
   },
   data () {
     return {
       name: '',
-      isActive: true
+      isActive: true,
+      aspects: []
     }
   },
   computed: {
@@ -38,17 +42,20 @@ export default {
       this.updatePlace({
         id: this.id,
         name: this.name,
-        isActive: this.isActive
+        isActive: this.isActive,
+        aspects: this.aspects.filter(v => v?.length)
       })
     },
     async onReset (isModification) {
       if (isModification) {
-        const { name, isActive } = await this.getPlaceById(this.id)
+        const { name, isActive, aspects = [] } = await this.getPlaceById(this.id)
         this.name = name
         this.isActive = isActive
+        this.aspects = [...aspects]
       } else {
         this.newRandomPlace()
         this.isActive = true
+        this.aspects = []
       }
     }
   }

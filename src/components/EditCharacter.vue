@@ -8,6 +8,8 @@
       <v-text-field label="Nom" v-model="name" hint="Nom du personage"
                     append-icon="fas fa-dice"
                     @click:append="newRandomName" />
+      Aspects:
+      <string-list v-model="aspects" />
     </template>
   </edit-dialog>
 </template>
@@ -16,17 +18,19 @@
 import { randomName } from '@/utils/names'
 import EditDialog from '@/components/EditDialog'
 import { mapActions, mapState } from 'vuex'
+import StringList from '@/components/StringList'
 
 export default {
   name: 'EditCharacter',
-  components: { EditDialog },
+  components: { StringList, EditDialog },
   props: {
     id: String
   },
   data () {
     return {
       name: '',
-      isPlayer: false
+      isPlayer: false,
+      aspects: []
     }
   },
   computed: {
@@ -41,17 +45,20 @@ export default {
         id: this.id,
         name: this.name,
         isPlayer: this.isPlayer,
-        isActive: true
+        isActive: true,
+        aspects: this.aspects.filter(v => v?.length)
       })
     },
     async onReset (isModification) {
       if (isModification) {
-        const { name, isPlayer } = await this.getCharacterById(this.id)
+        const { name, isPlayer, aspects = [] } = await this.getCharacterById(this.id)
         this.name = name
         this.isPlayer = isPlayer
+        this.aspects = [...aspects]
       } else {
         this.name = randomName()
         this.isPlayer = false
+        this.aspects = []
       }
     }
   }

@@ -5,8 +5,8 @@
       <v-divider></v-divider>
       <v-card-text>
         <ul v-if="activePlayerCharacters.length + activeNonPlayerCharacters.length">
-          <li v-for="(character) in activePlayerCharacters" :key="character.id"><b>{{character.name}} (joueur)</b> <edit-character :id="character.id" /></li>
-          <li v-for="(character) in activeNonPlayerCharacters" :key="character.id">{{character.name}} <edit-character :id="character.id" /></li>
+          <li v-for="(character) in activePlayerCharacters" :key="character.id"><b>{{character.name}} (joueur)</b> <v-chip v-for="aspect in character.aspects" :key="aspect" class="mr-1" x-small pill>{{ aspect }}</v-chip> <edit-character :id="character.id" /></li>
+          <li v-for="(character) in activeNonPlayerCharacters" :key="character.id">{{character.name}} <v-chip v-for="aspect in character.aspects" :key="aspect" class="mr-1" x-small pill>{{ aspect }}</v-chip> <edit-character :id="character.id" /></li>
         </ul>
         <span v-else>Aucun</span>
       </v-card-text>

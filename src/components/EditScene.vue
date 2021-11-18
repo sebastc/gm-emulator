@@ -12,6 +12,8 @@
                     @click:append="newRandomContext"
                     hint="Description de la situation initiale de la scène (lieu, partis en présence, ambiance, etc...)"
         />
+        Aspects:
+        <string-list v-model="aspects" />
         <v-textarea v-if="isCurrentSummaryEnabled" auto-grow outlined clearable v-model="summary" label="Résumé"
                     hint="Résumé de la scène complète pour faciliter la vue d'ensemble"
         />
@@ -23,9 +25,11 @@
 import { mapActions, mapGetters, mapState } from 'vuex'
 import { randomize } from '@/utils/random.ts'
 import EditDialog from '@/components/EditDialog'
+import StringList from '@/components/StringList'
+import { RSScene } from '@/store/types'
 export default {
   name: 'EditScene',
-  components: { EditDialog },
+  components: { StringList, EditDialog },
   props: {
     id: String
   },
@@ -34,6 +38,7 @@ export default {
       name: '',
       context: '',
       summary: '',
+      aspects: [],
       prevSummary: ''
     }
   },
@@ -77,23 +82,43 @@ export default {
         if (this.isPrevSummaryEnabled) {
           this.updateScene({ ...this.current.scenes[this.sceneCount - 1], summary: this.prevSummary })
         }
-        this.updateScene({ id: undefined, name: this.name, context: this.context, summary: '', isActive: true, isChanged: false, isInterrupted: false })
+        this.updateScene({
+          id: undefined,
+          name: this.name,
+          context: this.context,
+          summary: '',
+          isActive: true,
+          isChanged: false,
+          isInterrupted: false,
+          aspects: this.aspects.filter(v => v?.length)
+        })
       } else {
-        this.updateScene({ id: this.id, name: this.name, context: this.context, summary: this.summary, isActive: true, isChanged: false, isInterrupted: false })
+        this.updateScene({
+          id: this.id,
+          name: this.name,
+          context: this.context,
+          summary: this.summary,
+          isActive: true,
+          isChanged: false,
+          isInterrupted: false,
+          aspects: this.aspects.filter(v => v?.length)
+        })
       }
     },
     async onReset (isModification) {
       if (isModification) {
         const sceneById = await this.getSceneById(this.id)
-        const { name, context, summary } = sceneById
+        const { name, context, summary, aspects = [] } = sceneById
         this.name = name
         this.context = context
         this.summary = summary
+        this.aspects = [...aspects]
       } else {
         this.name = ''
         this.context = ''
         this.summary = ''
         this.prevSummary = ''
+        this.aspects = []
       }
     }
   }
