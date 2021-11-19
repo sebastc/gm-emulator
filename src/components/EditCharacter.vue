@@ -19,6 +19,7 @@ import { randomName } from '@/utils/names'
 import EditDialog from '@/components/EditDialog'
 import { mapActions, mapState } from 'vuex'
 import StringList from '@/components/StringList'
+import { randomize } from '@/utils/random'
 
 export default {
   name: 'EditCharacter',
@@ -34,6 +35,7 @@ export default {
     }
   },
   computed: {
+    ...mapState(['current'])
   },
   methods: {
     ...mapActions(['updateCharacter', 'getCharacterById']),
@@ -59,6 +61,12 @@ export default {
         this.name = randomName()
         this.isPlayer = false
         this.aspects = []
+        const list = (this.current?.game?.tagsByType?.['__aspect'] ?? [])
+        if (list.length) {
+          for (let i = 0; i < 5 && this.aspects.length < 3; i++) {
+            this.aspects.splice(this.aspects.length, 0, randomize(list))
+          }
+        }
       }
     }
   }

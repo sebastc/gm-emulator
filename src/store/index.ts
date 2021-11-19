@@ -247,7 +247,7 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
   console.log('actualTags', [...actualTags])
 
   const actualTagsValues = [...data.values].filter(tagValue => tagValue.tags.some(tag => actualTags.includes(tag)))
-  const internalTags = ['__action', '__action_object', '__place']
+  const internalTags = ['__action', '__action_object', '__place', '__aspect', '__place_traits']
   const res = new Map<string, string[]>()
   internalTags.forEach(iTag => {
     res.set(iTag, [...new Set(actualTagsValues

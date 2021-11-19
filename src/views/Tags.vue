@@ -5,7 +5,7 @@
       <v-card-title>{{ themeLabel(theme) }}</v-card-title>
       <v-card-text>
         <div v-for="(tags, type) in tagsByTheme[theme]" :key="theme + type">
-          <h3>{{ typeLabel(type) }}</h3>
+          <h3>{{ typeLabel(type) }} <small>({{ tags.length }})</small></h3>
           <v-hover v-slot:default="{ hover }" v-for="tag in tags" :key="theme + type + tag">
             <v-chip small class="mr-1 mb-1" :close="hover">{{ tag }}</v-chip>
           </v-hover>
@@ -71,7 +71,25 @@ export default {
         __action: 'Action',
         __ambiance: 'Ambiance',
         __event: 'Evénement',
+        __person: 'Personne',
+        __relation: 'Relation',
+        __faction: 'Faction',
         __theme: 'Thème',
+        __race: 'Race',
+        __class: 'Classe',
+        __weapon: 'Armes & Armures',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __entity_traits: 'Trait d\'Entité',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __place_traits: 'Trait de Lieu',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __relation_traits: 'Trait de Relation',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __object_traits: 'Trait d\'Objet',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __object_relation: 'Relation à un Objet',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __entity_relation: 'Relation à une entité',
         // eslint-disable-next-line @typescript-eslint/camelcase
         __action_object: 'Objet d\'action'
       }

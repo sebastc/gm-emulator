@@ -56,6 +56,12 @@ export default {
         this.newRandomPlace()
         this.isActive = true
         this.aspects = []
+        const list = (this.current?.game?.tagsByType?.['__place_traits'] ?? [])
+        if (list.length) {
+          for (let i = 0; i < 5 && this.aspects.length < 1; i++) {
+            this.aspects.splice(this.aspects.length, 0, randomize(list))
+          }
+        }
       }
     }
   }
