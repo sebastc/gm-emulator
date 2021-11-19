@@ -16,7 +16,7 @@
 </template>
 
 <script>
-import { mapState, mapActions } from 'vuex'
+import { mapActions, mapState } from 'vuex'
 
 function isThemeTag (tag) {
   return !tag.startsWith('__') || tag === '__theme'
@@ -31,8 +31,7 @@ export default {
   computed: {
     ...mapState(['tags', 'tagValues']),
     allTags () {
-      const newVar = [...new Set(this.tagValues.flatMap(e => e.tags))]
-      return newVar
+      return [...new Set(this.tagValues.flatMap(e => e.tags))]
     },
     themeTags () {
       return [...this.allTags.filter(t => isThemeTag(t))]
@@ -78,6 +77,7 @@ export default {
         __race: 'Race',
         __class: 'Classe',
         __weapon: 'Armes & Armures',
+        __vehicle: 'Véhicule',
         // eslint-disable-next-line @typescript-eslint/camelcase
         __entity_traits: 'Trait d\'Entité',
         // eslint-disable-next-line @typescript-eslint/camelcase
