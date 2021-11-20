@@ -38,7 +38,7 @@ export default {
     ...mapState(['current'])
   },
   methods: {
-    ...mapActions(['updateCharacter', 'getCharacterById']),
+    ...mapActions(['updateCharacter', 'getCharacterById', 'getRandom']),
     newRandomName () {
       this.name = randomName()
     },
@@ -61,11 +61,8 @@ export default {
         this.name = randomName()
         this.isPlayer = false
         this.aspects = []
-        const list = (this.current?.game?.tagsByType?.['__aspect'] ?? [])
-        if (list.length) {
-          for (let i = 0; i < 5 && this.aspects.length < 3; i++) {
-            this.aspects.splice(this.aspects.length, 0, randomize(list))
-          }
+        for (let i = 0; i < 5 && this.aspects.length < 3; i++) {
+          this.aspects.splice(this.aspects.length, 0, await this.getRandom('__aspect'))
         }
       }
     }

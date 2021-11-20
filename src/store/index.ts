@@ -228,6 +228,16 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
     return ancestors
   }
 
+  function extractReferencedTags (tag: string): string[] {
+    let res: string[] = []
+    const re = /#{([^}]*)}/g
+    let array
+    while ((array = re.exec(tag)) !== null) {
+      res = [...res, ...array[1].split(',')]
+    }
+    return res
+  }
+
   const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]
   const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends))]
   const childrenTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.tag))]
@@ -247,11 +257,12 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
   console.log('actualTags', [...actualTags])
 
   const actualTagsValues = [...data.values].filter(tagValue => tagValue.tags.some(tag => actualTags.includes(tag)))
-  const internalTags = ['__action', '__action_object', '__place', '__aspect', '__place_traits']
+  const referencedTags = [...new Set(actualTagsValues.flatMap(tagValue => extractReferencedTags(tagValue.value)))]
+  const internalTags = ['__action', '__action_object', '__place', '__aspect', '__place_traits', ...referencedTags]
   const res = new Map<string, string[]>()
   internalTags.forEach(iTag => {
     res.set(iTag, [...new Set(actualTagsValues
-      .filter(tagValue => tagValue.tags.some(t => t === iTag || (ancestorTags.get(t) || new Set<string>()).has(iTag)))
+      .filter(tagValue => tagValue.tags.some(t => t === iTag || ancestorTags.get(t)?.has(iTag)))
       .map(tv => tv.value))])
   })
   console.log('res: ', res)
@@ -504,10 +515,28 @@ const store = new Vuex.Store({
 
       await dispatch('createNewGame', { name: 'Arrrhh !!', tags: ['Pirates'] })
       for (let i = 0; i < 3; i++) {
-        await dispatch('updateCharacter', { name: randomName(), isActive: true, isPlayer: true })
+        await dispatch('updateCharacter', {
+          name: randomName(),
+          isActive: true,
+          isPlayer: true,
+          aspects: [
+            await dispatch('getRandom', '__aspect'),
+            await dispatch('getRandom', '__aspect'),
+            await dispatch('getRandom', '__aspect')
+          ]
+        })
       }
       for (let i = 0; i < 5; i++) {
-        await dispatch('updateCharacter', { name: randomName(), isActive: true, isPlayer: false })
+        await dispatch('updateCharacter', {
+          name: randomName(),
+          isActive: true,
+          isPlayer: false,
+          aspects: [
+            await dispatch('getRandom', '__aspect'),
+            await dispatch('getRandom', '__aspect'),
+            await dispatch('getRandom', '__aspect')
+          ]
+        })
         await dispatch('updatePlace', { name: '', isActive: true })
         await dispatch('updateGoal', { label: '', isActive: true })
       }
@@ -746,6 +775,22 @@ const store = new Vuex.Store({
         randomize(state.current.game.tagsByType.__action_object)
       ]
       await dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical, inspirations })
+    },
+    async getRandom ({ state, dispatch }, tag: string): Promise<string> {
+      console.log('getting random ' + tag)
+      if (!state.current) throw Error('No loaded game')
+      let res = randomize(state.current.game.tagsByType[tag])
+      if (res?.includes('#')) {
+        const re = /#{([^}]*)}/
+        let array
+        while ((array = re.exec(res)) !== null) {
+          console.log('replacing ' + array[0] + ' in ' + res + ' by random ' + array[1])
+          res = res.replace(array[0], await dispatch('getRandom', array[1]))
+        }
+        res = cleanupRandomConstruct(res)
+      }
+      console.log('got: ' + res)
+      return res
     },
     async addComment ({ dispatch, state }, comment: string) {
       if (!state.current) throw Error('No loaded game')

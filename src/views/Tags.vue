@@ -64,34 +64,36 @@ export default {
     ...mapActions(['loadTags']),
     typeLabel (type) {
       const mapping = {
-        __entity: 'Entité',
-        __place: 'Lieu',
-        __object: 'Objet',
-        __action: 'Action',
-        __ambiance: 'Ambiance',
-        __event: 'Evénement',
-        __person: 'Personne',
-        __relation: 'Relation',
-        __faction: 'Faction',
-        __theme: 'Thème',
-        __race: 'Race',
-        __class: 'Classe',
+        __entity: 'Entités',
+        __place: 'Lieux',
+        __object: 'Objets',
+        __action: 'Actions',
+        __ambiance: 'Ambiances',
+        __event: 'Evénements',
+        __person: 'Personnes',
+        __relation: 'Relations',
+        __faction: 'Factions',
+        __theme: 'Thèmes',
+        __race: 'Races',
+        __job: 'Métiers',
+        __class: 'Classes',
         __weapon: 'Armes & Armures',
-        __vehicle: 'Véhicule',
+        __vehicle: 'Véhicules',
+        __aspect: 'Aspects',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __entity_traits: 'Trait d\'Entité',
+        __entity_trait: 'Traits d\'Entité',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __place_traits: 'Trait de Lieu',
+        __place_trait: 'Traits de Lieu',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __relation_traits: 'Trait de Relation',
+        __relation_trait: 'Traits de Relation',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __object_traits: 'Trait d\'Objet',
+        __object_trait: 'Traits d\'Objet',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __object_relation: 'Relation à un Objet',
+        __object_relation: 'Relations à un Objet',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __entity_relation: 'Relation à une entité',
+        __entity_relation: 'Relations à une entité',
         // eslint-disable-next-line @typescript-eslint/camelcase
-        __action_object: 'Objet d\'action'
+        __action_object: 'Objets d\'action'
       }
       return mapping[type] || type
     },
