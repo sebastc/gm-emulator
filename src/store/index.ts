@@ -228,14 +228,30 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
     return ancestors
   }
 
-  function extractReferencedTags (tag: string): string[] {
-    let res: string[] = []
+  // FIXME factorize duplicate
+  type TagBlock = { type: 'reference'; required: string[] } | { type: 'literal'; value: string }
+
+  // FIXME factorize duplicate
+  function splitTag (tag: string): TagBlock[] {
+    let res: TagBlock[] = []
     const re = /#{([^}]*)}/g
+    let index = 0
     let array
     while ((array = re.exec(tag)) !== null) {
-      res = [...res, ...array[1].split(',')]
+      if (index !== array.index) {
+        res = [...res, { type: 'literal', value: tag.slice(index, array.index) }]
+      }
+      res = [...res, { type: 'reference', required: array[1].split(',') }]
+      index = re.lastIndex + 1
+    }
+    if (index !== tag.length) {
+      res = [...res, { type: 'literal', value: tag.slice(index, tag.length) }]
     }
     return res
+  }
+
+  function extractReferencedTags (tag: string): string[] {
+    return splitTag(tag).flatMap(e => e.type === 'reference' ? e.required : [])
   }
 
   const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]

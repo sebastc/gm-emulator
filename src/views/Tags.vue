@@ -6,8 +6,14 @@
       <v-card-text>
         <div v-for="(tags, type) in tagsByTheme[theme]" :key="theme + type">
           <h3>{{ typeLabel(type) }} <small>({{ tags.length }})</small></h3>
-          <v-hover v-slot:default="{ hover }" v-for="tag in tags" :key="theme + type + tag">
-            <v-chip small class="mr-1 mb-1" :close="hover">{{ tag }}</v-chip>
+          <v-hover v-slot:default="{ hover }" v-for="tag in tags" :key="theme + type + tag.value">
+            <v-chip small class="mr-1 mb-1" :close="hover">
+              <template v-if="!tag.isFormula">{{ tag.value }}</template>
+              <span v-for="(tagBlock, index) in tag.blocks" :key="index">
+                <u class="secondary--text" v-if="tagBlock.type === 'reference'">&lt;{{ tagBlock.required.map(t => typeLabel(t)).join(',') }}&gt;</u>
+                <span v-else class="white-space: pre;">&ZeroWidthSpace;{{ tagBlock.value }}&ZeroWidthSpace;</span>
+              </span>
+            </v-chip>
           </v-hover>
         </div>
       </v-card-text>
@@ -54,7 +60,16 @@ export default {
         typeTags.forEach(typeTag => {
           const list = subMap[typeTag] || []
           subMap[typeTag] = list
-          list.push(t.value)
+
+          const tagBlocks = this.splitTag(t.value)
+          if (tagBlocks.length > 0) {
+            const isFormula = tagBlocks.length > 1 || tagBlocks[0].type === 'reference'
+            list.push({
+              isFormula: isFormula,
+              value: t.value,
+              blocks: isFormula ? tagBlocks : undefined
+            })
+          }
         })
       })
       return res
@@ -71,6 +86,12 @@ export default {
         __ambiance: 'Ambiances',
         __event: 'Evénements',
         __person: 'Personnes',
+        __animal: 'Animaux',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __marine_animal: 'Animaux Marins',
+        // eslint-disable-next-line @typescript-eslint/camelcase
+        __terrestrial_animal: 'Animaux Terrestres',
+        __bird: 'Oiseaux',
         __relation: 'Relations',
         __faction: 'Factions',
         __theme: 'Thèmes',
@@ -102,6 +123,25 @@ export default {
         __theme: 'Défaut'
       }
       return mapping[type] || type
+    },
+
+    // FIXME factorize duplicate
+    splitTag (tag) {
+      let res = []
+      const re = /#{([^}]*)}/g
+      let index = 0
+      let array
+      while ((array = re.exec(tag)) !== null) {
+        if (index !== array.index) {
+          res = [...res, { type: 'literal', value: tag.slice(index, array.index) }]
+        }
+        res = [...res, { type: 'reference', required: array[1].split(',') }]
+        index = re.lastIndex
+      }
+      if (index !== tag.length) {
+        res = [...res, { type: 'literal', value: tag.slice(index, tag.length) }]
+      }
+      return res
     }
   },
   mounted () {
