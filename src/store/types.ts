@@ -318,6 +318,7 @@ export class RootState {
   games: RSGame[] = [];
   tags: string[] = [];
   tagValues: {value: string; tags: string[]}[] = [];
+  taxonomy: {tag: string; value?: string; extends?: string}[] = [];
 }
 
 /*

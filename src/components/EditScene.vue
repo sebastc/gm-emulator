@@ -13,7 +13,7 @@
                     hint="Description de la situation initiale de la scène (lieu, partis en présence, ambiance, etc...)"
         />
         Aspects:
-        <string-list v-model="aspects" />
+        <string-list v-model="aspects" hint="aspect" random-tag="__aspect"/>
         <v-textarea v-if="isCurrentSummaryEnabled" auto-grow outlined clearable v-model="summary" label="Résumé"
                     hint="Résumé de la scène complète pour faciliter la vue d'ensemble"
         />

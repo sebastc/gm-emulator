@@ -35,15 +35,9 @@ function isTypeTag (tag) {
 export default {
   name: 'Tags',
   computed: {
-    ...mapState(['tags', 'tagValues']),
-    allTags () {
-      return [...new Set(this.tagValues.flatMap(e => e.tags))]
-    },
+    ...mapState(['tags', 'tagValues', 'taxonomy']),
     themeTags () {
-      return [...this.allTags.filter(t => isThemeTag(t))]
-    },
-    typeTags () {
-      return [...this.allTags.filter(t => isTypeTag(t))]
+      return [...new Set(['__theme', ...this.taxonomy.filter(t => t.isTheme).map(t => t.tag)])]
     },
     tagsByTheme () {
       const res = {}
@@ -73,56 +67,18 @@ export default {
         })
       })
       return res
+    },
+    displayMap () {
+      return this.taxonomy.reduce((a, t) => ({ ...a, [t.tag]: t.value || t.tag }), { __theme: 'Défaut' })
     }
   },
   methods: {
     ...mapActions(['loadTags']),
     typeLabel (type) {
-      const mapping = {
-        __entity: 'Entités',
-        __place: 'Lieux',
-        __object: 'Objets',
-        __action: 'Actions',
-        __ambiance: 'Ambiances',
-        __event: 'Evénements',
-        __person: 'Personnes',
-        __animal: 'Animaux',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __marine_animal: 'Animaux Marins',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __terrestrial_animal: 'Animaux Terrestres',
-        __bird: 'Oiseaux',
-        __relation: 'Relations',
-        __faction: 'Factions',
-        __theme: 'Thèmes',
-        __race: 'Races',
-        __job: 'Métiers',
-        __class: 'Classes',
-        __weapon: 'Armes & Armures',
-        __vehicle: 'Véhicules',
-        __aspect: 'Aspects',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __entity_trait: 'Traits d\'Entité',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __place_trait: 'Traits de Lieu',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __relation_trait: 'Traits de Relation',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __object_trait: 'Traits d\'Objet',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __object_relation: 'Relations à un Objet',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __entity_relation: 'Relations à une entité',
-        // eslint-disable-next-line @typescript-eslint/camelcase
-        __action_object: 'Objets d\'action'
-      }
-      return mapping[type] || type
+      return this.displayMap[type] || type
     },
-    themeLabel (type) {
-      const mapping = {
-        __theme: 'Défaut'
-      }
-      return mapping[type] || type
+    themeLabel (theme) {
+      return this.displayMap[theme] || theme
     },
 
     // FIXME factorize duplicate

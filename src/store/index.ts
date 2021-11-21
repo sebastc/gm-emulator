@@ -221,7 +221,7 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
     mapToAncestors.set(tag, ancestors)
     data.taxonomy
       .filter(entry => entry.tag === tag)
-      .map(entry => entry.extends)
+      .map(entry => entry.extends ?? '__root__')
       .flatMap(entry => [entry, ...traverseToAncestors(entry, mapToAncestors)])
       .forEach(tags => ancestors.add(tags))
     console.log(tag + ' => ', ancestors)
@@ -255,7 +255,7 @@ function activeTagsByType (tags: string[]): Record<string, string[]> {
   }
 
   const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]
-  const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends))]
+  const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends ?? '__root__'))]
   const childrenTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.tag))]
   const leafTags = childrenTags.filter(t => !parentTags.includes(t))
   console.log('leafTags', leafTags)
@@ -390,6 +390,7 @@ const store = new Vuex.Store({
     },
     loadTags (state: RootState) {
       state.tags = [...data.tags]
+      state.taxonomy = [...data.taxonomy]
       state.tagValues = [...data.values]
     }
   },
@@ -793,19 +794,16 @@ const store = new Vuex.Store({
       await dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical, inspirations })
     },
     async getRandom ({ state, dispatch }, tag: string): Promise<string> {
-      console.log('getting random ' + tag)
       if (!state.current) throw Error('No loaded game')
       let res = randomize(state.current.game.tagsByType[tag])
       if (res?.includes('#')) {
         const re = /#{([^}]*)}/
         let array
         while ((array = re.exec(res)) !== null) {
-          console.log('replacing ' + array[0] + ' in ' + res + ' by random ' + array[1])
           res = res.replace(array[0], await dispatch('getRandom', array[1]))
         }
         res = cleanupRandomConstruct(res)
       }
-      console.log('got: ' + res)
       return res
     },
     async addComment ({ dispatch, state }, comment: string) {

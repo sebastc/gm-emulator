@@ -9,7 +9,7 @@
                     append-icon="fas fa-dice"
                     @click:append="newRandomName" />
       Aspects:
-      <string-list v-model="aspects" />
+      <string-list v-model="aspects" hint="aspect" random-tag="__aspect"/>
     </template>
   </edit-dialog>
 </template>
