@@ -23,16 +23,26 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
+      - name: Set the correct Node version using nvm
+        shell: bash -e -l {0} 
+        run: nvm install
+
       - name: Setup git user
         run: | 
           git config --global user.email "sebastc@github.com"
           git config --global user.name "Github Action"
 
       - name: Install build dependencies
-        run: npm ci
+        shell: bash -e -l {0} 
+        run: |
+         nvm use
+         npm ci
 
       - name: Build
-        run: npm run build
+        shell: bash -e -l {0} 
+        run: |
+         nvm use
+         npm run build
 
       - name: Deploy to gh-pages
         run: ./deploy.sh
