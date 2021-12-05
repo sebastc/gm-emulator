@@ -69,7 +69,7 @@ export default {
       return res
     },
     displayMap () {
-      return this.taxonomy.reduce((a, t) => ({ ...a, [t.tag]: t.value || t.tag }), { __theme: 'Défaut' })
+      return this.taxonomy.reduce((a, t) => ({ ...a, [t.tag]: t.value || t.tag }), { __theme: 'Défaut', __name__: 'Nom Aléatoire' })
     }
   },
   methods: {

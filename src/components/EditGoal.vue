@@ -39,11 +39,9 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['updateGoal', 'getGoalById']),
-    newRandomGoal () {
-      const action = randomize(this.current.game.tagsByType.__action)
-      const object = randomize(this.current.game.tagsByType.__action_object)
-      this.label = cleanupRandomConstruct(`${action} de ${object}`)
+    ...mapActions(['updateGoal', 'getGoalById', 'getRandom']),
+    async newRandomGoal () {
+      this.label = await this.getRandom({ query: '__goal' })
     },
     onSave (isNew) {
       this.updateGoal({
@@ -58,7 +56,7 @@ export default {
         this.label = label
         this.isActive = isActive
       } else {
-        this.newRandomGoal()
+        await this.newRandomGoal()
         this.isActive = true
       }
     }

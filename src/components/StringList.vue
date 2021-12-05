@@ -20,7 +20,7 @@ import { Prop } from 'vue-property-decorator'
   computed: { ...mapState(['current']) }
 })
 export default class StringList extends Vue {
-  getRandom!: (tag: string) => Promise<string>;
+  getRandom!: (params: { query: string; tags?: string[]}) => Promise<string>;
 
   @Prop({ type: String, required: false })
   private hint?: string;
@@ -32,12 +32,26 @@ export default class StringList extends Vue {
   private value!: string[];
 
   async addEntry () {
-    const res = this.randomTag ? await this.getRandom(this.randomTag) : ''
+    let res: string
+    if (this.randomTag) {
+      const params = { query: this.randomTag }
+      console.log('randomValue: ', params)
+      res = await this.getRandom(params)
+    } else {
+      res = ''
+    }
     this.value.splice(this.value.length, 0, res)
   }
 
   async randomValue (index: number) {
-    const res = this.randomTag ? await this.getRandom(this.randomTag) : ''
+    let res: string
+    if (this.randomTag) {
+      const params = { query: this.randomTag }
+      console.log('randomValue: ', params)
+      res = await this.getRandom(params)
+    } else {
+      res = ''
+    }
     this.value.splice(index, 1, res)
   }
 }

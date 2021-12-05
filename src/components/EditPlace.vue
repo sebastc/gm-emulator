@@ -11,10 +11,8 @@
 </template>
 
 <script>
-import { randomName } from '@/utils/names'
 import EditDialog from '@/components/EditDialog'
 import { mapActions, mapState } from 'vuex'
-import { randomize } from '@/utils/random'
 import StringList from '@/components/StringList'
 
 export default {
@@ -34,11 +32,11 @@ export default {
     ...mapState(['current'])
   },
   methods: {
-    ...mapActions(['updatePlace', 'getPlaceById']),
-    newRandomPlace () {
-      this.name = randomize(this.current.game.tagsByType.__place) + ' de ' + randomName()
+    ...mapActions(['updatePlace', 'getPlaceById', 'getRandom']),
+    async newRandomPlace () {
+      this.name = await this.getRandom({ query: '__place_aspect', tags: ['__place'] })
     },
-    onSave (isNew) {
+    onSave () {
       this.updatePlace({
         id: this.id,
         name: this.name,
@@ -53,15 +51,9 @@ export default {
         this.isActive = isActive
         this.aspects = [...aspects]
       } else {
-        this.newRandomPlace()
+        await this.newRandomPlace()
         this.isActive = true
         this.aspects = []
-        const list = (this.current?.game?.tagsByType?.['__place_traits'] ?? [])
-        if (list.length) {
-          for (let i = 0; i < 5 && this.aspects.length < 1; i++) {
-            this.aspects.splice(this.aspects.length, 0, randomize(list))
-          }
-        }
       }
     }
   }

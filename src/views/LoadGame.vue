@@ -115,17 +115,22 @@ export default {
       if (this.tags.length === 0) {
         res.push('Choisir au moins un tag')
       }
-      if (this.countSelected('__entity') < 20) {
-        res.push("Selectionner plus de tags (pas assez d'entités)")
+      const minCount = 0
+      const nbEntities = this.countSelected('__entity')
+      if (nbEntities < minCount) {
+        res.push(`Selectionner plus de tags (pas assez d'entités - ${nbEntities} / ${minCount})`)
       }
-      if (this.countSelected('__object') < 20) {
-        res.push("Selectionner plus de tags (pas assez d'objets)")
+      const nbObjects = this.countSelected('__object')
+      if (nbObjects < minCount) {
+        res.push(`Selectionner plus de tags (pas assez d'objets - ${nbObjects} / ${minCount})`)
       }
-      if (this.countSelected('__place') < 20) {
-        res.push('Selectionner plus de tags (pas assez de lieux)')
+      const nbPlaces = this.countSelected('__place')
+      if (nbPlaces < minCount) {
+        res.push(`Selectionner plus de tags (pas assez de lieux - ${nbPlaces} / ${minCount})`)
       }
-      if (this.countSelected('__action') < 20) {
-        res.push("Selectionner plus de tags (pas assez d'actions)")
+      const nbActions = this.countSelected('__action')
+      if (nbActions < minCount) {
+        res.push(`Selectionner plus de tags (pas assez d'actions - ${nbActions} / ${minCount})`)
       }
       return res
     },

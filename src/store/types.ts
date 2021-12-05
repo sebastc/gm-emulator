@@ -1,4 +1,5 @@
 import BaseClient from 'remotestoragejs/release/types/baseclient'
+import { TagInfo } from '@/store/tags/types'
 
 type Scope = 'people' | 'place' | 'object' | 'action';
 type CharacterRef = string;
@@ -262,7 +263,7 @@ export interface Entity {
 export interface RSGame extends Entity {
   name: string;
   tags: string[];
-  tagsByType: Record<string, string[]>;
+  tagsByType: Record<string, TagInfo[]>;
 }
 
 export interface RSCharacter extends Entity {

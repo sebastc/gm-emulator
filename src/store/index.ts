@@ -9,6 +9,7 @@ import { Entity, Repository, RootState, RSCharacter, RSGame, RSGoal, RSLog, RSPl
 import RemoteStorage from 'remotestoragejs'
 import Widget from 'remotestorage-widget'
 import BaseClient from 'remotestoragejs/release/types/baseclient'
+import { TagStorage } from '@/store/tags/types'
 
 Vue.use(Vuex)
 
@@ -207,88 +208,6 @@ function mergeInto<T extends Entity> (list: T[], elt: T, reverse = false) {
   }
 }
 
-function activeTagsByType (tags: string[]): Record<string, string[]> {
-  if (!tags.length) {
-    return {}
-  }
-
-  function traverseToAncestors (tag: string, mapToAncestors: Map<string, Set<string>>): Set<string> {
-    const existingAncestors = mapToAncestors.get(tag)
-    if (existingAncestors) {
-      return existingAncestors
-    }
-    const ancestors = new Set<string>()
-    mapToAncestors.set(tag, ancestors)
-    data.taxonomy
-      .filter(entry => entry.tag === tag)
-      .map(entry => entry.extends ?? '__root__')
-      .flatMap(entry => [entry, ...traverseToAncestors(entry, mapToAncestors)])
-      .forEach(tags => ancestors.add(tags))
-    console.log(tag + ' => ', ancestors)
-    return ancestors
-  }
-
-  // FIXME factorize duplicate
-  type TagBlock = { type: 'reference'; required: string[] } | { type: 'literal'; value: string }
-
-  // FIXME factorize duplicate
-  function splitTag (tag: string): TagBlock[] {
-    let res: TagBlock[] = []
-    const re = /#{([^}]*)}/g
-    let index = 0
-    let array
-    while ((array = re.exec(tag)) !== null) {
-      if (index !== array.index) {
-        res = [...res, { type: 'literal', value: tag.slice(index, array.index) }]
-      }
-      res = [...res, { type: 'reference', required: array[1].split(',') }]
-      index = re.lastIndex + 1
-    }
-    if (index !== tag.length) {
-      res = [...res, { type: 'literal', value: tag.slice(index, tag.length) }]
-    }
-    return res
-  }
-
-  function extractReferencedTags (tag: string): string[] {
-    return splitTag(tag).flatMap(e => e.type === 'reference' ? e.required : [])
-  }
-
-  const allTags = [...new Set<string>(data.values.flatMap(tagValue => tagValue.tags))]
-  const parentTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.extends ?? '__root__'))]
-  const childrenTags = [...new Set<string>(data.taxonomy.map(taxon => taxon.tag))]
-  const leafTags = childrenTags.filter(t => !parentTags.includes(t))
-  console.log('leafTags', leafTags)
-  const rootTags = parentTags.filter(t => !childrenTags.includes(t))
-  console.log('rootTags', rootTags)
-  const ancestorTags: Map<string, Set<string>> = new Map<string, Set<string>>()
-  allTags.forEach(tag => traverseToAncestors(tag, ancestorTags))
-  console.log('ancestorTags', ancestorTags)
-  const actualTags = [...new Set<string>(
-    [
-      ...tags,
-      ...tags.flatMap(t => [...ancestorTags.get(t) || []])
-    ]
-  )]
-  console.log('actualTags', [...actualTags])
-
-  const actualTagsValues = [...data.values].filter(tagValue => tagValue.tags.some(tag => actualTags.includes(tag)))
-  const referencedTags = [...new Set(actualTagsValues.flatMap(tagValue => extractReferencedTags(tagValue.value)))]
-  const internalTags = ['__action', '__action_object', '__place', '__aspect', '__place_traits', ...referencedTags]
-  const res = new Map<string, string[]>()
-  internalTags.forEach(iTag => {
-    res.set(iTag, [...new Set(actualTagsValues
-      .filter(tagValue => tagValue.tags.some(t => t === iTag || ancestorTags.get(t)?.has(iTag)))
-      .map(tv => tv.value))])
-  })
-  console.log('res: ', res)
-  const newObject: Record<string, string[]> = {}
-  for (const [key, value] of res) {
-    newObject[key] = value
-  }
-  return newObject
-}
-
 const store = new Vuex.Store({
   state: new RootState(),
   getters: {
@@ -357,12 +276,6 @@ const store = new Vuex.Store({
       }
       state.current.sceneIndex = index
       state.current.logs = logs
-    },
-    randomPlace (state: RootState) {
-      if (!state.current) {
-        throw Error('No loaded game')
-      }
-      return cleanupRandomConstruct((randomize(state.current.game.tagsByType.__place ?? []) + ' de ' + randomName()))
     },
     updateCharacter (state: RootState, update: RSCharacter) {
       if (!state.current) {
@@ -537,9 +450,9 @@ const store = new Vuex.Store({
           isActive: true,
           isPlayer: true,
           aspects: [
-            await dispatch('getRandom', '__aspect'),
-            await dispatch('getRandom', '__aspect'),
-            await dispatch('getRandom', '__aspect')
+            await dispatch('getRandom', { query: '__aspect', tags: ['__entity'] }),
+            await dispatch('getRandom', { query: '__aspect', tags: ['__entity'] }),
+            await dispatch('getRandom', { query: '__aspect', tags: ['__entity'] })
           ]
         })
       }
@@ -549,13 +462,13 @@ const store = new Vuex.Store({
           isActive: true,
           isPlayer: false,
           aspects: [
-            await dispatch('getRandom', '__aspect'),
-            await dispatch('getRandom', '__aspect'),
-            await dispatch('getRandom', '__aspect')
+            await dispatch('getRandom', { query: '__aspect', tags: ['__entity'] }),
+            await dispatch('getRandom', { query: '__aspect', tags: ['__entity'] }),
+            await dispatch('getRandom', { query: '__aspect', tags: ['__entity'] })
           ]
         })
-        await dispatch('updatePlace', { name: '', isActive: true })
-        await dispatch('updateGoal', { label: '', isActive: true })
+        await dispatch('updatePlace', { name: await dispatch('getRandom', { query: '__place_aspect' }), isActive: true })
+        await dispatch('updateGoal', { label: await dispatch('getRandom', { query: '__goal' }), isActive: true })
       }
       await dispatch('updateScene', {
         name: 'A la taverne du "Poney Fringant"',
@@ -594,7 +507,12 @@ const store = new Vuex.Store({
     },
     async createNewGame ({ commit /*, state */ }, game: RSGame) {
       commit('loadTags')
-      game.tagsByType = activeTagsByType(game.tags)
+      const tagStorage = new TagStorage()
+      const filterTags: string[] = game.tags.flatMap(t => [t, ...tagStorage.get(t)?.ancestors ?? new Set<string>()])
+      game.tagsByType = [...tagStorage.types].reduce((a, t: string) => ({
+        ...a,
+        [t]: tagStorage.tagInfoByType[t].filter(ti => [ti.tag, ...ti.isA].find(t2 => filterTags.includes(t2)))
+      }), {})
       commit('newGame', await rsGameModule.save(game))
     },
     async listSavedGames ({ commit }) {
@@ -788,19 +706,38 @@ const store = new Vuex.Store({
         break
       }
       const inspirations = relatedAspects?.length && Math.random() < 0.5 ? [randomize(relatedAspects)] : [
-        randomize(state.current.game.tagsByType.__action),
-        randomize(state.current.game.tagsByType.__action_object)
+        await dispatch('getRandom', { query: '__action' }),
+        await dispatch('getRandom', { query: '__action_object' })
       ]
       await dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical, inspirations })
     },
-    async getRandom ({ state, dispatch }, tag: string): Promise<string> {
+    async getRandom (
+      { state, dispatch },
+      // { tag, tagSet }: { tag: string; tagSet: string[] }
+      { query: tag, tags = [] }: { query: string; tags?: string[]}
+    ): Promise<string> { // { res: string; tagSet: string[] }> {
       if (!state.current) throw Error('No loaded game')
-      let res = randomize(state.current.game.tagsByType[tag])
+      // console.log('getRandom', tag, tags)
+      const list = state.current.game.tagsByType[tag].filter(ti => ti.requires.every(r => tags.includes(r)) && !ti.excludes.some(r => tags.includes(r)))
+      if (!list?.length) {
+        console.warn('tag(' + tag + ') is empty')
+        return ''
+      }
+      const selected = randomize(list);
+      [...selected.isA, ...selected.requires, ...selected.groups.map(g => '__group__:' + g)].forEach(s => tags.splice(tags.length, 0, s))
+      let res = selected.value
+      console.log(res)
+      if (res?.includes('/')) {
+        res = randomize(res.split('/'))
+      }
       if (res?.includes('#')) {
         const re = /#{([^}]*)}/
         let array
         while ((array = re.exec(res)) !== null) {
-          res = res.replace(array[0], await dispatch('getRandom', array[1]))
+          const reference = array[0]
+          const referencedTag = array[1]
+          const resolvedValue = referencedTag === '__name__' ? randomName() : await dispatch('getRandom', { query: referencedTag, tags })
+          res = res.replace(reference, resolvedValue) // [array[1]/* , ...tagSet */]))
         }
         res = cleanupRandomConstruct(res)
       }

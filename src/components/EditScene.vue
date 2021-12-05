@@ -69,10 +69,10 @@ export default {
   },
   methods: {
     ...mapActions(['updateScene', 'getSceneById']),
-    newRandomContext () {
-      const place = Math.random() > 0.5 && this.activePlaces.length > 0 ? randomize(this.activePlaces).name : randomize(this.current.game.tagsByType.__place)
-      const action = randomize(this.current.game.tagsByType.__action)
-      const object = randomize(this.current.game.tagsByType.__action_object)
+    async newRandomContext () {
+      const place = Math.random() > 0.5 && this.activePlaces.length > 0 ? randomize(this.activePlaces).name : await this.getRandom({ query: '__place' })
+      const action = await this.getRandom({ query: '__action' })
+      const object = await this.getRandom({ query: '__action_object' })
       this.context = ` - Lieu : ${place}
  - action : ${action}
  - objet : ${object}`
