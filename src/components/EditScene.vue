@@ -68,14 +68,17 @@ export default {
     }
   },
   methods: {
-    ...mapActions(['updateScene', 'getSceneById']),
+    ...mapActions(['updateScene', 'getSceneById', 'getRandom']),
     async newRandomContext () {
       const place = Math.random() > 0.5 && this.activePlaces.length > 0 ? randomize(this.activePlaces).name : await this.getRandom({ query: '__place' })
-      const action = await this.getRandom({ query: '__action' })
-      const object = await this.getRandom({ query: '__action_object' })
-      this.context = ` - Lieu : ${place}
- - action : ${action}
- - objet : ${object}`
+      const goal = await this.getRandom({ query: '__goal' })
+      this.context = ` - Objectif : ${goal}
+ - Lieu : ${place}`
+      if (Math.random() < 0.2) {
+        const event = await this.getRandom({ query: '__event' })
+        this.context += `
+ - Evénement : ${event}`
+      }
     },
     onSave (isNew) {
       if (isNew) {

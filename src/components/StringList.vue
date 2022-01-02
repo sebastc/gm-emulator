@@ -16,8 +16,7 @@ import { Prop } from 'vue-property-decorator'
 
 @Component({
   components: { VBtn, VIcon, VTextField, VList, VListItem, VListItemTitle },
-  methods: { ...mapActions(['getRandom']) },
-  computed: { ...mapState(['current']) }
+  methods: { ...mapActions(['getRandom']) }
 })
 export default class StringList extends Vue {
   getRandom!: (params: { query: string; tags?: string[]}) => Promise<string>;

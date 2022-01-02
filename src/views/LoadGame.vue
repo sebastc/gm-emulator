@@ -8,6 +8,8 @@
           <v-autocomplete
             v-model="tags"
             :items="availableTags"
+            item-text="label"
+            item-value="id"
             :search-input.sync="search"
             :rules="tagsRules()"
             @input="search = ''"
@@ -24,18 +26,18 @@
                 :input-value="data.selected"
                 close
                 small
-                @click:close="remove(data.item)"
+                @click:close="remove(data.item.id)"
               >
-                {{ data.item }} ({{countValues(data.item)}})
+                {{ data.item.label }} ({{countValues(data.item.id)}})
               </v-chip>
             </template>
             <template v-slot:item="data">
-              <b>{{ data.item }} </b>
+              <b>{{ data.item.label }} </b>
               <small>
-                (entités: {{countValues(data.item, '__entity')}},
-                lieux: {{countValues(data.item, '__place')}},
-                objets: {{countValues(data.item, '__object')}},
-                actions: {{countValues(data.item, '__action')}})
+                (entités: {{countValues(data.item.id, '__entity')}},
+                lieux: {{countValues(data.item.id, '__place')}},
+                objets: {{countValues(data.item.id, '__object')}},
+                actions: {{countValues(data.item.id, '__action')}})
               </small>
             </template>
           </v-autocomplete>
@@ -76,13 +78,15 @@ export default {
   data () {
     return {
       name: 'Sans Nom',
-      availableTags: [],
       search: '',
       tags: []
     }
   },
   computed: {
-    ...mapState(['games']),
+    ...mapState(['games', 'tagStorage']),
+    availableTags () {
+      return this.tagStorage.getOptions('__theme').map(info => ({ id: info.tag ?? info.value, label: info.value ?? info.tag }))
+    },
     enableDevUtils () {
       return process.env.VUE_APP_ENABLE_DEV_UTILS === 'true'
     }
@@ -93,11 +97,11 @@ export default {
       const index = this.tags.indexOf(item)
       if (index >= 0) this.tags.splice(index, 1)
     },
-    countValues (tag, type) {
+    countValues (theme, type) {
       if (type) {
-        return data.values.filter(x => x.tags.includes(tag) && x.tags.includes(type)).length
+        return data.values.filter(x => (x.requires ?? []).includes(theme) && (x.isA ?? []).includes(type)).length
       } else {
-        return data.values.filter(x => x.tags.includes(tag)).length
+        return data.values.filter(x => (x.requires ?? []).includes(theme)).length
       }
     },
     countSelected (type) {
@@ -148,7 +152,6 @@ export default {
     ...mapActions(['createFakeGame'])
   },
   async mounted () {
-    this.availableTags = data.tags.concat().sort()
     await this.listSavedGames()
   }
 }

@@ -236,6 +236,7 @@ const store = new Vuex.Store({
         sceneIndex: -1,
         logs: []
       }
+      state.tagStorage.setFilters(...game.tags)
     },
     savedGames (state: RootState, games: RSGame[]) {
       state.games = [...games]
@@ -251,6 +252,7 @@ const store = new Vuex.Store({
       logs: RSLog[];
     }) {
       state.current = { game, characters, places, goals, scenes, sceneIndex, logs }
+      state.tagStorage.setFilters(...game.tags)
     },
     deleteGame (state: RootState, id: string) {
       if (state.current?.game?.id === id) {
@@ -263,6 +265,7 @@ const store = new Vuex.Store({
     },
     closeGame (state: RootState) {
       state.current = undefined
+      state.tagStorage.clearFilters()
     },
     updateScene (state: RootState, update: RSScene) {
       if (!state.current?.game) {
@@ -300,11 +303,6 @@ const store = new Vuex.Store({
         throw Error('No loaded game')
       }
       mergeInto(state.current.logs, update)
-    },
-    loadTags (state: RootState) {
-      state.tags = [...data.tags]
-      state.taxonomy = [...data.taxonomy]
-      state.tagValues = [...data.values]
     }
   },
   actions: {
@@ -505,21 +503,13 @@ const store = new Vuex.Store({
         mechanical: 'La borduere de l\'enclot tombe dans le vide suite à une secousse plus forte que les autres'
       })
     },
-    async createNewGame ({ commit /*, state */ }, game: RSGame) {
-      commit('loadTags')
-      const tagStorage = new TagStorage()
-      const filterTags: string[] = game.tags.flatMap(t => [t, ...tagStorage.get(t)?.ancestors ?? new Set<string>()])
-      game.tagsByType = [...tagStorage.types].reduce((a, t: string) => ({
-        ...a,
-        [t]: tagStorage.tagInfoByType[t].filter(ti => [ti.tag, ...ti.isA].find(t2 => filterTags.includes(t2)))
-      }), {})
+    async createNewGame ({ commit, state }, game: RSGame) {
       commit('newGame', await rsGameModule.save(game))
     },
     async listSavedGames ({ commit }) {
       commit('savedGames', (await rsGameModule.list()).reverse())
     },
     async loadSavedGame ({ commit }, id) {
-      commit('loadTags')
       const game = await rsGameModule.get(id)
       const characterPromise = rsGameModule.characters(game).list()
       const placesPromise = rsGameModule.places(game).list()
@@ -712,44 +702,16 @@ const store = new Vuex.Store({
       await dispatch('updateSceneLog', { icon: 'fas fa-bolt', mechanical, inspirations })
     },
     async getRandom (
-      { state, dispatch },
+      { state /* , dispatch */ },
       // { tag, tagSet }: { tag: string; tagSet: string[] }
       { query: tag, tags = [] }: { query: string; tags?: string[]}
     ): Promise<string> { // { res: string; tagSet: string[] }> {
-      if (!state.current) throw Error('No loaded game')
-      // console.log('getRandom', tag, tags)
-      const list = state.current.game.tagsByType[tag].filter(ti => ti.requires.every(r => tags.includes(r)) && !ti.excludes.some(r => tags.includes(r)))
-      if (!list?.length) {
-        console.warn('tag(' + tag + ') is empty')
-        return ''
-      }
-      const selected = randomize(list);
-      [...selected.isA, ...selected.requires, ...selected.groups.map(g => '__group__:' + g)].forEach(s => tags.splice(tags.length, 0, s))
-      let res = selected.value
-      console.log(res)
-      if (res?.includes('/')) {
-        res = randomize(res.split('/'))
-      }
-      if (res?.includes('#')) {
-        const re = /#{([^}]*)}/
-        let array
-        while ((array = re.exec(res)) !== null) {
-          const reference = array[0]
-          const referencedTag = array[1]
-          const resolvedValue = referencedTag === '__name__' ? randomName() : await dispatch('getRandom', { query: referencedTag, tags })
-          res = res.replace(reference, resolvedValue) // [array[1]/* , ...tagSet */]))
-        }
-        res = cleanupRandomConstruct(res)
-      }
-      return res
+      return state.tagStorage.getRandom(tag, tags) ?? 'N/A'
     },
     async addComment ({ dispatch, state }, comment: string) {
       if (!state.current) throw Error('No loaded game')
       if (!(state.current.sceneIndex === state.current.scenes.length - 1)) throw Error('Not on last scene')
       await dispatch('updateSceneLog', { icon: 'far fa-comments', interpretation: comment })
-    },
-    loadTags ({ commit }) {
-      commit('loadTags')
     },
     showRemoteStorageWidget ({ commit }) {
       widget.attach('remotestorage-widget')

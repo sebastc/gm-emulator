@@ -1,11 +1,12 @@
 import data from '@/assets/data.json'
-import { randomize } from '@/utils/random'
+import { cleanupRandomConstruct, randomize } from '@/utils/random'
 import { randomName } from '@/utils/names'
 
 type ParsedTag = { type: 'reference'; required: string[] } | { type: 'literal'; value: string }
 
 export interface Tag {
   tag: string; // tagIds
+  inherited?: boolean; // Whether propagated as ancestor in children, by default: true
   isInstance?: boolean; // for non generative node (eg. H.P. Themes, Cthulhu, the One Ring, etc...), by default: false
   value?: string; // can be literals or formulas
   isA?: string[]; // tagIds (inherited)
@@ -17,6 +18,7 @@ export interface Tag {
 
 export interface TagInfo extends Tag {
   isInstance: boolean;
+  inherited: boolean;
   value: string;
   parsedValue: ParsedTag[];
   isFormula: boolean;
@@ -28,34 +30,39 @@ export interface TagInfo extends Tag {
 }
 
 export class TagStorage {
-  tagById: Record<string, Tag> = {}
-  tagInfoById: Map<string, TagInfo> = new Map<string, TagInfo>()
-  tagInfoByType: Record<string, TagInfo[]> = {}
-  types: Set<string> = new Set<string>()
-  filters: Set<string> = new Set<string>(['__theme'])
+  private tagById: Record<string, Tag> = {}
+  private tagInfoById: Map<string, TagInfo> = new Map<string, TagInfo>()
+  private tagInfoByType: Record<string, TagInfo[]> = {}
+  private types: Set<string> = new Set<string>()
+  private filters: Set<string> = new Set<string>()
 
-  get (tag: string): TagInfo|undefined {
+  public get (tag: string): TagInfo|undefined {
     return this.tagInfoById.get(tag)
   }
 
-  getOptions (tag: string, currentTags: string[] = []): TagInfo[] {
+  public getOptions (tag: string, currentTags: string[] = []): TagInfo[] {
+    currentTags = [...currentTags, ...this.filters]
     return (this.tagInfoByType[tag] ?? []).filter(t =>
-      [...t.ancestors].some(t => this.filters.has(t)) &&
+      (t.isFormula || !this.tagInfoByType[t.tag]?.length) &&
       t.requires.every(t => currentTags.includes(t)) &&
       !t.excludes.some(t => currentTags.includes(t)) &&
       !t.groups.map(g => `group@${g}`).some(t => currentTags.includes(t))
     )
   }
 
-  getRandom (tag: string, currentTags: string[] = []): string | undefined {
-    return this.getInternalRandom(tag, currentTags)?.res
+  public getRandom (tag: string, currentTags: string[] = []): string | undefined {
+    const res = this.getInternalRandom(tag, currentTags)?.res
+    if (res) return cleanupRandomConstruct(res)
+    return undefined
   }
 
   private getInternalRandom (tag: string, currentTags: string[] = []): { res: string; newTags: string[]} | undefined {
-    console.log(`getInternalRandom(${tag}, ${currentTags})`)
+    // console.log(`getInternalRandom(${tag}, ${currentTags})`)
     const options = this.getOptions(tag, currentTags)
     // console.log('options: ', options)
-    if (!options?.length) return undefined
+    if (!options?.length) {
+      return undefined
+    }
     const selected = randomize(options)
     // console.log('selected: ', selected)
     let res = selected.value
@@ -80,7 +87,7 @@ export class TagStorage {
         newTags = resolvedValue.newTags
       }
     }
-    console.log(`getInternalRandom(${tag}, ${currentTags}) => `, { res, newTags })
+    // console.log(`getInternalRandom(${tag}, ${currentTags}) => `, { res, newTags })
 
     return { res, newTags }
   }
@@ -90,7 +97,7 @@ export class TagStorage {
     if (existingInfo) return existingInfo
     else {
       const tagObject: Tag = this.tagById[tag] ?? { tag }
-      const { tag: id, value = id, isA = [], excludes = [], requires = [], groups = [], isInstance = false } = tagObject
+      const { tag: id, value = id, isA = [], excludes = [], requires = [], groups = [], isInstance = false, inherited = true } = tagObject
       const parsedValue = TagStorage.splitTag(value)
       const referenced = parsedValue.flatMap(pv => pv.type === 'reference' ? pv.required : [])
       const ancestors = [...isA ?? [], ...(isA ?? []).flatMap(t => [...this.register(t).ancestors ?? []])]
@@ -104,10 +111,10 @@ export class TagStorage {
         excludes: [...new Set([...excludes, ...ancestorInfos.flatMap(a => a.excludes)])].filter(e => !requires.includes(e)),
         requires: [...new Set([...requires, ...ancestorInfos.flatMap(a => a.requires)])].filter(i => !excludes.includes(i)),
         groups: [...new Set([...groups, ...ancestorInfos.flatMap(a => a.groups)])],
-        isInstance: isInstance,
-        ancestors: new Set(ancestors)
+        inherited,
+        isInstance,
+        ancestors: new Set(ancestorInfos.filter(a => a.inherited).map(a => a.tag))
       }
-      info.ancestors.add('__theme')
       this.tagInfoById.set(tag, info)
       ancestors.forEach(t => {
         let options = this.tagInfoByType[t]
@@ -140,40 +147,58 @@ export class TagStorage {
     return res
   }
 
-  add (...tags: Tag[]) {
+  public add (...tags: Tag[]) {
     tags.forEach(elt => { this.tagById[elt.tag] = elt })
     tags.forEach(elt => { this.register(elt.tag) })
   }
 
-  // FIXME theme filter
-  constructor (init = true) {
+  public constructor (init = true) {
     if (init) {
       this.add(
-        ...data.taxonomy.map(t => ({
-          tag: t.tag,
-          value: t.value,
-          isA: [
-            ...t.extends ? [t.extends] : [],
-            ...t.isTheme ? ['__theme'] : []
-          ],
+        ...data.values.map(t => ({
+          tag: t.tag ?? t.value,
+          value: t.value ?? t.tag,
+          isA: t.isA ?? [],
           requires: t.requires ?? [],
           excludes: t.excludes ?? [],
-          groups: []
-        })),
-        ...data.values.map(t => ({
-          tag: t.value,
-          value: t.value,
-          isA: t.tags,
-          requires: t.requires ?? [],
-          // excludes: t.excludes ?? [],
-          excludes: [],
-          groups: t.groups ?? []
+          groups: t.groups ?? [],
+          inherited: t.inherited
         }))
       )
     }
   }
 
-  setFilters (...filters: string[]) {
-    this.filters = new Set(filters)
+  public setFilters (...filters: string[]) {
+    if (!filters?.length) filters = ['__theme']
+    const x = filters.flatMap(t => [t, ...this.tagInfoById.get(t)?.ancestors ?? []])
+    this.filters = new Set(x)
+    console.log('actual filters: ', this.filters)
+    return this
+  }
+
+  public clearFilters () {
+    this.filters.clear()
+    return this
+  }
+
+  public getAllThemeInfo () {
+    return [...this.tagInfoById.values()].filter(t => t.ancestors.has('__theme') || t.tag === '__theme')
+  }
+
+  public getAllNonThemeInfo () {
+    return [...this.tagInfoById.values()].filter(t => !(t.ancestors.has('__theme') || t.tag === '__theme'))
+  }
+
+  public getThemes () {
+    if (this.filters.size) {
+      return [...this.filters]
+    } else {
+      return this.getAllThemeInfo().map(t => t.tag)
+    }
+  }
+
+  public getAllNonThemeTags () {
+    const allThemes = new Set(...this.getAllThemeInfo().map(i => i.tag))
+    return [...this.getAllNonThemeInfo()].filter(t => t.requires.filter(r => allThemes.has(r)).every(r => this.filters.has(r)) && !(t.ancestors.has('__theme') || t.tag === '__theme')).map(t => t.tag)
   }
 }

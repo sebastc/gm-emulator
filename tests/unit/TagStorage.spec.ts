@@ -11,7 +11,7 @@ describe('TagStorage', () => {
     expect(tagInfo?.isA).toHaveLength(0)
     expect(tagInfo?.excludes).toHaveLength(0)
     expect(tagInfo?.requires).toHaveLength(0)
-    expect(tagInfo?.ancestors).toEqual(new Set(['__theme']))
+    expect(tagInfo?.ancestors).toEqual(new Set([]))
     expect(tagInfo?.isInstance).toEqual(false)
   })
 
@@ -27,14 +27,28 @@ describe('TagStorage', () => {
     const tagStorage = new TagStorage(false)
     tagStorage.add({ tag: 't', isA: ['u'] }, { tag: 'u', isA: ['v'] }, { tag: 'v' })
     const tagInfo = tagStorage.get('t')
-    expect(tagInfo?.ancestors).toEqual(new Set(['u', 'v', '__theme']))
+    expect(tagInfo?.ancestors).toEqual(new Set(['u', 'v']))
+  })
+
+  it('inherit requires from ancestors', () => {
+    const tagStorage = new TagStorage(false)
+    tagStorage.add({ tag: 't', isA: ['u'] }, { tag: 'u', requires: ['v'] }, { tag: 'v' })
+    const tagInfo = tagStorage.get('t')
+    expect(tagInfo?.requires).toEqual(['v'])
+  })
+
+  it('doesn\'t propagate ancestors that are not inherited', () => {
+    const tagStorage = new TagStorage(false)
+    tagStorage.add({ tag: 't', isA: ['u'] }, { tag: 'u', isA: ['v'] }, { tag: 'v', inherited: false })
+    const tagInfo = tagStorage.get('t')
+    expect(tagInfo?.ancestors).toEqual(new Set(['u']))
   })
 
   it('registers under ancestors', () => {
     const tagStorage = new TagStorage(false)
     tagStorage.add({ tag: 't', isA: ['u'] }, { tag: 'u', isA: ['v'] }, { tag: 'v' })
     expect(new Set(tagStorage.getOptions('u').map(t => t.tag))).toEqual(new Set(['t']))
-    expect(new Set(tagStorage.getOptions('v').map(t => t.tag))).toEqual(new Set(['t', 'u']))
+    expect(new Set(tagStorage.getOptions('v').map(t => t.tag))).toEqual(new Set(['t']))
   })
 
   it("getOptions() doesn't return unsatisfied requirements", () => {
@@ -75,11 +89,13 @@ describe('TagStorage', () => {
   it('can be filtered by themes', () => {
     const tagStorage = new TagStorage(false)
     tagStorage.add(
+      { tag: '__some_theme', isA: ['__theme'] },
       { tag: 'a', isA: ['__query'] },
-      { tag: 'b', isA: ['__query', '__some_theme'] }
+      { tag: 'b', isA: ['__query'], requires: ['__some_theme'] }
     )
-    expect(tagStorage.getOptions('__query')).toHaveLength(2)
-    tagStorage.setFilters('__some_theme')
+    tagStorage.setFilters()
     expect(tagStorage.getOptions('__query')).toHaveLength(1)
+    tagStorage.setFilters('__some_theme')
+    expect(tagStorage.getOptions('__query')).toHaveLength(2)
   })
 })
